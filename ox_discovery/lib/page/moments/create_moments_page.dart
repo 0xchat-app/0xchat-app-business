@@ -42,7 +42,7 @@ class CreateMomentsPage extends StatefulWidget {
   final List<String>? imageList;
   final String? videoPath;
   final String? videoImagePath;
-  final ValueNotifier<NotedUIModel?>? notedUIModel;
+  final NotedUIModel? notedUIModel;
   const CreateMomentsPage(
       {Key? key,
       required this.type,
@@ -70,6 +70,8 @@ class _CreateMomentsPageState extends State<CreateMomentsPage> {
   String? videoImagePath;
 
   bool _isInputFocused = false;
+
+  bool _postMomentTag = false;
 
   final TextEditingController _textController = TextEditingController();
 
@@ -165,31 +167,33 @@ class _CreateMomentsPageState extends State<CreateMomentsPage> {
         ),
         child: Stack(
           children: [
-            SingleChildScrollView(
-              child: Column(
+            Column(
                 children: [
                   _buildAppBar(),
-                  Container(
-                    padding: EdgeInsets.only(
-                      left: 24.px,
-                      right: 24.px,
-                      bottom: currentPageType == EMomentType.content ? 100.px : 500.px,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _showEditImageWidget(),
-                        _videoWidget(),
-                        _pictureWidget(),
-                        _quoteWidget(),
-                        _captionWidget(),
-                        _visibleContactsWidget(),
-                        // _selectRelayWidget(),
-                      ],
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Container(
+                        padding: EdgeInsets.only(
+                          left: 24.px,
+                          right: 24.px,
+                          bottom: currentPageType == EMomentType.content ? 100.px : 500.px,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _showEditImageWidget(),
+                            _videoWidget(),
+                            _pictureWidget(),
+                            _quoteWidget(),
+                            _captionWidget(),
+                            _visibleContactsWidget(),
+                            // _selectRelayWidget(),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ],
-              ),
             ),
             Align(
               child: SendProgressWidget(
@@ -487,9 +491,9 @@ class _CreateMomentsPageState extends State<CreateMomentsPage> {
   }
 
   Widget _quoteWidget() {
-    ValueNotifier<NotedUIModel?>? notedUIModel = widget.notedUIModel;
-    if (currentPageType != EMomentType.quote || notedUIModel == null || notedUIModel.value == null) return const SizedBox();
-    return MomentQuoteWidget(notedId: widget.notedUIModel!.value!.noteDB.noteId);
+    NotedUIModel? notedUIModel = widget.notedUIModel;
+    if (currentPageType != EMomentType.quote || notedUIModel == null) return const SizedBox();
+    return MomentQuoteWidget(notedId: widget.notedUIModel!.noteDB.noteId);
   }
 
   Widget _captionWidget() {
@@ -540,7 +544,7 @@ class _CreateMomentsPageState extends State<CreateMomentsPage> {
     bool isGroup = EOptionMomentsType.group == widget.sendMomentsType;
     String content = _visibleType.name;
     if(isGroup){
-      RelayGroupDBISAR? groupDB = RelayGroup.sharedInstance.myGroups[widget.groupId];
+      RelayGroupDBISAR? groupDB = RelayGroup.sharedInstance.myGroups[widget.groupId]?.value;
       content = 'Groups - ${groupDB?.name ?? ''}';
     }
     return Container(
@@ -707,6 +711,8 @@ class _CreateMomentsPageState extends State<CreateMomentsPage> {
     // if (_uploadCompleter != null) {
     //   getMediaStr = await _uploadCompleter!.future;
     // }
+    if(_postMomentTag) return;
+    _postMomentTag = true;
     OXLoading.show();
 
     String getMediaStr = await _getUploadMediaContent();
@@ -715,7 +721,7 @@ class _CreateMomentsPageState extends State<CreateMomentsPage> {
     String content = '${DiscoveryUtils.changeAtUserToNpub(draftCueUserMap, inputText)} $getMediaStr';
     OKEvent? event;
 
-    NoteDBISAR? noteDB = widget.notedUIModel?.value?.noteDB;
+    NoteDBISAR? noteDB = widget.notedUIModel?.noteDB;
 
     List<String> hashTags = MomentContentAnalyzeUtils(content).getMomentHashTagList;
     List<String>? getHashTags = hashTags.isEmpty ? null : hashTags;
@@ -781,7 +787,7 @@ class _CreateMomentsPageState extends State<CreateMomentsPage> {
     String? groupId = widget.groupId;
     if(groupId == null) return CommonToast.instance.show(context, 'groupId is empty !');
     List<String> previous = Nip29.getPrevious([[groupId]]);
-    NoteDBISAR? noteDB = widget.notedUIModel?.value?.noteDB;
+    NoteDBISAR? noteDB = widget.notedUIModel?.noteDB;
     OKEvent result;
     OXLoading.show();
     if(currentPageType == EMomentType.quote && noteDB != null){

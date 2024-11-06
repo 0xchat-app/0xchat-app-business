@@ -2,10 +2,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ox_chat/manager/chat_message_helper.dart';
+import 'package:ox_chat/manager/chat_page_config.dart';
 import 'package:ox_chat/manager/ecash_helper.dart';
 import 'package:ox_chat/model/constant.dart';
 import 'package:ox_chat/page/ecash/ecash_open_dialog.dart';
@@ -21,6 +23,7 @@ import 'package:ox_common/log_util.dart';
 import 'package:ox_common/ox_common.dart';
 import 'package:ox_common/upload/file_type.dart';
 import 'package:ox_common/upload/upload_utils.dart';
+import 'package:ox_common/utils/aes_encrypt_utils.dart';
 import 'package:ox_common/utils/encode_utils.dart';
 import 'package:ox_common/utils/image_picker_utils.dart';
 import 'package:ox_common/utils/list_extension.dart';
@@ -34,10 +37,10 @@ import 'package:ox_common/widgets/common_file_cache_manager.dart';
 import 'package:ox_common/widgets/common_image_gallery.dart';
 import 'package:ox_common/widgets/common_long_content_page.dart';
 import 'package:ox_common/widgets/common_video_page.dart';
+import 'package:ox_module_service/ox_module_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:ox_chat/manager/chat_draft_manager.dart';
 import 'package:ox_chat/manager/chat_data_cache.dart';
-import 'package:ox_chat/manager/chat_page_config.dart';
 import 'package:ox_chat_ui/ox_chat_ui.dart';
 import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 import 'package:ox_chat/page/contacts/contact_user_info_page.dart';
@@ -55,7 +58,6 @@ import 'package:ox_common/utils/permission_utils.dart';
 import 'package:ox_common/utils/ox_userinfo_manager.dart';
 import 'package:ox_common/widgets/common_hint_dialog.dart';
 import 'package:ox_common/widgets/common_toast.dart';
-import 'package:ox_common/widgets/common_webview.dart';
 import 'package:ox_common/widgets/common_loading.dart';
 import 'package:ox_common/model/chat_type.dart';
 import 'package:ox_localizable/ox_localizable.dart';
@@ -66,6 +68,9 @@ import 'package:flutter_chat_types/src/message.dart' as UIMessage;
 import 'package:device_info/device_info.dart';
 import 'package:ox_common/widgets/zaps/zaps_action_handler.dart';
 
+import '../../manager/chat_data_manager_models.dart';
+import 'message_data_controller.dart';
+
 part 'chat_send_message_handler.dart';
 
 class ChatGeneralHandler {
@@ -73,10 +78,13 @@ class ChatGeneralHandler {
   ChatGeneralHandler({
     required this.session,
     types.User? author,
-    this.refreshMessageUI,
-    this.fileEncryptionType = types.EncryptionType.none,
-  }) : author = author ?? _defaultAuthor() {
+    this.anchorMsgId,
+    this.unreadMessageCount = 0,
+  }) : author = author ?? _defaultAuthor(),
+       fileEncryptionType = _fileEncryptionType(session) {
+    setupDataController();
     setupOtherUserIfNeeded();
+    setupReplyHandler();
     setupMentionHandlerIfNeeded();
   }
 
@@ -84,28 +92,19 @@ class ChatGeneralHandler {
   UserDBISAR? otherUser;
   final ChatSessionModelISAR session;
   final types.EncryptionType fileEncryptionType;
+  final String? anchorMsgId;
 
-  bool _hasMoreMessage = false;
-  bool get hasMoreMessage => _hasMoreMessage;
-  set hasMoreMessage(bool value) {
-    final coreChatType = session.coreChatType;
-     if (coreChatType == 2 || coreChatType == 4) {
-       _hasMoreMessage = true;
-       return ;
-     }
-    _hasMoreMessage = value;
-  }
-
-  ChatReplyHandler replyHandler = ChatReplyHandler();
+  late ChatReplyHandler replyHandler;
   ChatMentionHandler? mentionHandler;
+  late MessageDataController dataController;
 
   TextEditingController inputController = TextEditingController();
 
-  Function(List<types.Message>?)? refreshMessageUI;
-
-  Set<String> reactionsListenMsgId = {};
-
   final tempMessageSet = <types.Message>{};
+
+  int unreadMessageCount;
+  types.Message? unreadFirstMessage;
+  bool isPreviewMode = false;
 
   static types.User _defaultAuthor() {
     UserDBISAR? userDB = OXUserInfoManager.sharedInstance.currentUserInfo;
@@ -115,8 +114,30 @@ class ChatGeneralHandler {
     );
   }
 
+  static types.EncryptionType _fileEncryptionType(ChatSessionModelISAR session) {
+    final sessionType = session.chatType;
+    switch (sessionType) {
+      case ChatType.chatSingle:
+      case ChatType.chatStranger:
+      case ChatType.chatSecret:
+      case ChatType.chatGroup:
+        return types.EncryptionType.encrypted;
+      case ChatType.chatChannel:
+      case ChatType.chatRelayGroup:
+        return types.EncryptionType.none;
+      default:
+        return types.EncryptionType.none;
+    }
+  }
+
   static UserDBISAR? _defaultOtherUser(ChatSessionModelISAR session) {
     return Account.sharedInstance.userCache[session.getOtherPubkey]?.value;
+  }
+
+  void setupDataController() {
+    final chatType = session.chatTypeKey;
+    if (chatType == null) throw Exception('setupDataController: chatType is null');
+    dataController = MessageDataController(chatType);
   }
 
   void setupOtherUserIfNeeded() {
@@ -136,6 +157,10 @@ class ChatGeneralHandler {
     }
   }
 
+  void setupReplyHandler() {
+    replyHandler = ChatReplyHandler(session.chatId);
+  }
+
   void setupMentionHandlerIfNeeded() {
     final userListGetter = session.userListGetter;
     if (userListGetter == null) return ;
@@ -152,56 +177,59 @@ class ChatGeneralHandler {
     this.mentionHandler = mentionHandler;
   }
 
-  void dispose() {
-    // for (var msg in tempMessageSet) {
-    //   ChatDataCache.shared.deleteMessage(session, msg);
-    // }
-    ChatDataCache.shared.cleanSessionMessage(session);
-    removeMessageReactionsListener();
+  Future initializeMessage() async {
+    final anchorMsgId = this.anchorMsgId;
+    if (anchorMsgId != null && anchorMsgId.isNotEmpty) {
+      await dataController.loadNearbyMessage(
+        targetMessageId: anchorMsgId,
+        beforeCount: ChatPageConfig.messagesPerPage,
+        afterCount: ChatPageConfig.messagesPerPage,
+      );
+    } else {
+      final messages = await dataController.loadMoreMessage(
+        loadMsgCount: ChatPageConfig.messagesPerPage,
+      );
+
+      // Try request more messages
+      final chatType = session.coreChatType;
+      if (chatType != null) {
+        // Try request newer messages
+        int? since = messages.firstOrNull?.createdAt;
+        if (since != null) since ~/= 1000;
+        Messages.recoverMessagesFromRelay(
+          session.chatId,
+          chatType,
+          since: since,
+        );
+      }
+    }
+
+    await initializeUnreadMessage();
+    initializeImageGallery();
   }
-}
 
-extension ChatMessageHandlerEx on ChatGeneralHandler {
+  Future initializeUnreadMessage() async {
+    if (unreadMessageCount < 10) return ;
 
-  Future loadMoreMessage(
-      List<types.Message> originMessage, {
-        List<types.Message>? allMessage,
-        int increasedCount = ChatPageConfig.messagesPerPage,
-      }) async {
-    // final allMsg = allMessage ?? (await ChatDataCache.shared.getSessionMessage(session));
-    // var end = 0;
-    // // Find the index of the last message in all the messages.
-    // var index = -1;
-    // for (int i = originMessage.length - 1; i >= 0; i--) {
-    //   final msg = originMessage[i];
-    //   final result = allMsg.indexOf(msg);
-    //   if (result >= 0) {
-    //     index = result;
-    //     break ;
-    //   }
-    // }
-    // if (index == -1 && increasedCount == 0) {
-    //   end = ChatPageConfig.messagesPerPage;
-    // } else {
-    //   end = index + 1 + increasedCount;
-    // }
-    // hasMoreMessage = end < allMsg.length;
-    //
-    // final newMessageList = allMsg.sublist(0, min(allMsg.length, end));
-    // refreshMessageUI?.call(newMessageList);
-
-    final newMessages = await ChatDataCache.shared.loadSessionMessage(
-      session: session,
-      loadMsgCount: increasedCount,
+    final messages = await dataController.getLocalMessage(
+      limit: unreadMessageCount,
     );
-    hasMoreMessage = newMessages.isNotEmpty;
-
-    final messages = await ChatDataCache.shared.getSessionMessage(session: session);
-    updateMessageReactionsListener(messages);
+    unreadFirstMessage = messages.lastOrNull;
   }
 
-  void refreshMessage(List<types.Message> messages) {
-    refreshMessageUI?.call(messages);
+  Future initializeImageGallery() async {
+    final messageList = await dataController.getLocalMessage(
+      messageTypes: [
+        MessageType.image,
+        MessageType.encryptedImage,
+        MessageType.template,
+      ],
+    );
+    dataController.galleryCache.initializePreviewImages(messageList);
+  }
+
+  void dispose() {
+    dataController.dispose();
   }
 }
 
@@ -262,7 +290,7 @@ extension ChatGestureHandlerEx on ChatGeneralHandler {
       );
 
   void _onLinkTextPressed(BuildContext context, String text) {
-    OXNavigator.presentPage(context, allowPageScroll: true, (context) => CommonWebView(text), fullscreenDialog: true);
+    OXModuleService.invoke('ox_common', 'gotoWebView', [context, text, null, null, null, null]);
   }
 
   Future messagePressHandler(BuildContext context, types.Message message) async {
@@ -298,7 +326,10 @@ extension ChatGestureHandlerEx on ChatGeneralHandler {
           );
           break;
         case CustomMessageType.video:
-          CommonVideoPage.show(VideoMessageEx(message).url);
+          final videoURI = VideoMessageEx(message).videoURI;
+          if (videoURI.isEmpty) return ;
+
+          CommonVideoPage.show(videoURI);
           break;
         default:
           break;
@@ -318,30 +349,12 @@ extension ChatGestureHandlerEx on ChatGeneralHandler {
     required String messageId,
     required String imageUri,
   }) async {
-    final messages = await ChatDataCache.shared.getSessionMessage(session: session);
-    final gallery = messages.map((message) {
-      if (message is types.ImageMessage) {
-        return PreviewImage(
-          id: message.id,
-          uri: message.uri,
-          decryptSecret: message.decryptKey,
-        );
-      } else if (message is types.CustomMessage
-          && message.customType == CustomMessageType.imageSending) {
-        String uri = ImageSendingMessageEx(message).url;
-        if (uri.isEmpty) {
-          uri = ImageSendingMessageEx(message).path;
-        }
-        if (uri.isEmpty) return null;
 
-        return PreviewImage(
-          id: message.id,
-          uri: uri,
-          decryptSecret: message.decryptKey,
-        );
-      }
-    }).whereNotNull().toList();
+    final galleryCache = dataController.galleryCache;
 
+    await galleryCache.initializeComplete;
+
+    final gallery = galleryCache.gallery;
     final initialPage = gallery.indexWhere(
       (element) => element.id == messageId || element.uri == imageUri,
     );
@@ -430,7 +443,7 @@ extension ChatGestureHandlerEx on ChatGeneralHandler {
   void templateMessagePressHandler(BuildContext context, types.CustomMessage message) {
     final link = TemplateMessageEx(message).link;
     if (link.isRemoteURL) {
-      OXNavigator.presentPage(context, allowPageScroll: true, (context) => CommonWebView(link), fullscreenDialog: true);
+      OXModuleService.invoke('ox_common', 'gotoWebView', [context, link, null, null, null, null]);
     } else {
       link.tryHandleCustomUri(context: context);
     }
@@ -506,7 +519,7 @@ extension ChatMenuHandlerEx on ChatGeneralHandler {
         _reportMenuItemPressHandler(context, message);
         break;
       case MessageLongPressEventType.quote:
-        replyHandler.quoteMenuItemPressHandler(context, message);
+        replyHandler.quoteMenuItemPressHandler(message);
         break;
       case MessageLongPressEventType.zaps:
         _zapMenuItemPressHandler(context, message);
@@ -659,7 +672,7 @@ extension ChatMenuHandlerEx on ChatGeneralHandler {
   }
 
   void messageDeleteHandler(types.Message message) {
-    ChatDataCache.shared.deleteMessage(session, message);
+    dataController.removeMessage(message: message);
   }
 
   /// Handles the press event for the "Reaction emoji" in a menu item.
@@ -726,11 +739,10 @@ extension ChatMenuHandlerEx on ChatGeneralHandler {
         );
       }
 
-      ChatDataCache.shared.updateMessage(
-        session: session,
-        message: message.copyWith(
+      dataController.updateMessage(
+        message.copyWith(
           reactions: reactions,
-        ),
+        )
       );
     }
 
@@ -755,13 +767,21 @@ extension ChatInputMoreHandlerEx on ChatGeneralHandler {
       } else if (readMediaVisualUserSelectedGranted) {
         final filePaths = await OXCommon.select34MediaFilePaths(type);
         LogUtil.d('Michael: albumPressHandler------filePaths =${filePaths}');
-        List<File> fileList = [];
-        await Future.forEach(filePaths, (element) async {
-          fileList.add(File(element));
-        });
-        final messageSendHandler = type == 2
-            ? this.sendVideoMessageWithFile : this.sendImageMessageWithFile;
-        messageSendHandler(context, fileList);
+
+        bool isVideo = type == 2;
+        if (isVideo) {
+          List<Media> fileList = [];
+          await Future.forEach(filePaths, (path) async {
+            fileList.add(Media()..path = path);
+          });
+          sendVideoMessageWithFile(context, fileList);
+        } else {
+          List<File> fileList = [];
+          await Future.forEach(filePaths, (path) async {
+            fileList.add(File(path));
+          });
+          sendImageMessageWithFile(context, fileList);
+        }
         return;
       }
     } else {
@@ -861,8 +881,6 @@ extension ChatInputMoreHandlerEx on ChatGeneralHandler {
   Future<void> _goToPhoto(BuildContext context, int type) async {
     // type: 1 - image, 2 - video
     final isVideo = type == 2;
-    final messageSendHandler = isVideo
-        ? this.sendVideoMessageWithFile : this.sendImageMessageWithFile;
 
     final res = await ImagePickerUtils.pickerPaths(
       galleryMode: isVideo ? GalleryMode.video : GalleryMode.image,
@@ -871,14 +889,17 @@ extension ChatInputMoreHandlerEx on ChatGeneralHandler {
       compressSize: 1024,
     );
 
-    List<File> fileList = [];
-    await Future.forEach(res, (element) async {
-      final entity = element;
-      final file = File(entity.path ?? '');
-      fileList.add(file);
-    });
-
-    messageSendHandler(context, fileList);
+    if (isVideo) {
+      sendVideoMessageWithFile(context, res);
+    } else {
+      List<File> fileList = [];
+      await Future.forEach(res, (element) async {
+        final entity = element;
+        final file = File(entity.path ?? '');
+        fileList.add(file);
+      });
+      sendImageMessageWithFile(context, fileList);
+    }
   }
 
   Future<void> _goToCamera(BuildContext context) async {
@@ -904,26 +925,6 @@ extension ChatInputHandlerEx on ChatGeneralHandler {
     final chatId = session.chatId;
     if (chatId.isEmpty) return ;
     ChatDraftManager.shared.updateTempDraft(chatId, text);
-  }
-}
-
-extension ChatReactionsHandlerEx on ChatGeneralHandler {
-
-  void updateMessageReactionsListener(List<types.Message> newMessageList) {
-    final actionSubscriptionId = newMessageList
-        .map((e) => e.remoteId)
-        .where((id) => id != null && id.isNotEmpty)
-        .toList()
-        .cast<String>();
-
-    reactionsListenMsgId.addAll(actionSubscriptionId);
-
-    Messages.sharedInstance.loadMessagesReactions(reactionsListenMsgId.toList(), session.chatType);
-  }
-
-  void removeMessageReactionsListener() {
-    reactionsListenMsgId.clear();
-    Messages.sharedInstance.closeMessagesActionsRequests();
   }
 }
 

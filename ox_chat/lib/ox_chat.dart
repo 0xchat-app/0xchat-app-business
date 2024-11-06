@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:ox_chat/manager/chat_data_cache.dart';
 import 'package:ox_chat/manager/chat_message_helper.dart';
 import 'package:ox_chat/manager/ecash_helper.dart';
+import 'package:ox_chat/model/community_menu_option_model.dart';
 import 'package:ox_chat/model/option_model.dart';
 import 'package:ox_chat/model/recent_search_user.dart';
 import 'package:ox_chat/model/recent_search_user_isar.dart';
@@ -25,13 +26,12 @@ import 'package:ox_chat/page/ecash/ecash_info.dart';
 import 'package:ox_chat/page/ecash/ecash_info_isar.dart';
 import 'package:ox_chat/page/ecash/ecash_signature_record.dart';
 import 'package:ox_chat/page/ecash/ecash_signature_record_isar.dart';
-import 'package:ox_chat/page/session/chat_channel_message_page.dart';
 import 'package:ox_chat/page/session/chat_choose_share_page.dart';
 import 'package:ox_chat/page/session/chat_message_page.dart';
-import 'package:ox_chat/page/session/chat_relay_group_msg_page.dart';
 import 'package:ox_chat/page/session/chat_session_list_page.dart';
 import 'package:ox_chat/page/session/chat_video_play_page.dart';
 import 'package:ox_chat/page/session/search_page.dart';
+import 'package:ox_chat/page/session/unified_search_page.dart';
 import 'package:ox_chat/utils/general_handler/chat_general_handler.dart';
 import 'package:ox_chat/utils/general_handler/chat_nostr_scheme_handler.dart';
 import 'package:ox_chat/widget/relay_info_widget.dart';
@@ -39,7 +39,6 @@ import 'package:ox_common/business_interface/ox_chat/contact_base_page_state.dar
 import 'package:ox_common/business_interface/ox_chat/interface.dart';
 import 'package:ox_common/business_interface/ox_usercenter/interface.dart';
 import 'package:ox_common/business_interface/ox_usercenter/zaps_detail_model.dart';
-import 'package:ox_common/log_util.dart';
 import 'package:ox_common/model/chat_session_model_isar.dart';
 import 'package:ox_common/model/chat_type.dart';
 import 'package:ox_common/navigator/navigator.dart';
@@ -84,7 +83,6 @@ class OXChat extends OXFlutterModule {
     'contactChanneDetailsPage': _contactChanneDetailsPage,
     'relayGroupInfoPage': _relayGroupInfoPage,
     'groupInfoPage': _groupInfoPage,
-    'commonWebview': _commonWebview,
     'zapsRecordDetail' : _zapsRecordDetail,
     'sendTextMsg': _sendTextMsg,
     'sendTemplateMessage': _sendTemplateMessage,
@@ -92,6 +90,8 @@ class OXChat extends OXFlutterModule {
     'getTryDecodeNostrScheme': getTryDecodeNostrScheme,
     'showRelayInfoWidget': _showRelayInfoWidget,
     'showCashuOpenDialog': showCashuOpenDialog,
+    'addContact': addContact,
+    'addGroup': addGroup,
   };
 
   @override
@@ -175,20 +175,22 @@ class OXChat extends OXFlutterModule {
           allowFetchUserFromRelay: params?['allowFetchUserFromRelay'] ?? false,
           shouldPop: params?['shouldPop'],
         ),);
+      case 'UnifiedSearchPage':
+        return UnifiedSearchPage(initialIndex: params?['initialIndex']).show(context);
     }
     return null;
   }
 
-  Widget _showRelayInfoWidget() {
-    return RelayInfoWidget();
+  Widget _showRelayInfoWidget(bool showRelayIcon) {
+    return RelayInfoWidget(showRelayIcon: showRelayIcon);
   }
 
-  void _showMyIdCardDialog(BuildContext context) {
+  void _showMyIdCardDialog(BuildContext context,{UserDBISAR? otherUser}) {
     showDialog(
         context: context,
         barrierDismissible: true,
         builder: (BuildContext context) {
-          return MyIdCardDialog();
+          return MyIdCardDialog(otherUser:otherUser);
         });
   }
 
@@ -218,7 +220,7 @@ class OXChat extends OXFlutterModule {
   }
 
   Future<void> _contactChanneDetailsPage(BuildContext? context,{required String channelId}) async {
-    ChannelDBISAR? channelDB = Channels.sharedInstance.channels[channelId];
+    ChannelDBISAR? channelDB = Channels.sharedInstance.channels[channelId]?.value;
     if(channelDB == null){
       await OXLoading.show();
       channelDB = await Channels.sharedInstance.searchChannel(channelId, null);
@@ -233,10 +235,6 @@ class OXChat extends OXFlutterModule {
 
   Future<void> _groupInfoPage(BuildContext? context,{required String groupId}) async {
     OXNavigator.pushPage(context!, (context) => GroupInfoPage(groupId: groupId));
-  }
-
-  Future<void> _commonWebview(BuildContext? context,{required String url}) async {
-    OXNavigator.presentPage(context!, allowPageScroll: true, (context) => CommonWebView(url), fullscreenDialog: true);
   }
 
   Future<void> _zapsRecordDetail(BuildContext? context,{required String invoice, required String amount, required String zapsTime}) async {
@@ -268,9 +266,9 @@ class OXChat extends OXFlutterModule {
     );
 
     chatGeneralHandler.sendSystemMessage(
-        context,
-        content,
-        localTextKey:localTextKey,
+      content,
+      context: context,
+      localTextKey:localTextKey,
     );
   }
 
@@ -327,7 +325,7 @@ class OXChat extends OXFlutterModule {
 
     if (Platform.isAndroid){
       String fileContent = await loadFileByAndroid(decryptedFile);
-      await OXNavigator.pushPage(context, (context) => CommonWebView(fileContent, isLocalHtmlResource: true,));
+      await OXModuleService.invoke('ox_common', 'gotoWebView', [context, fileContent, null, null, true, null]);
     } else {
       // Open on page
       var fileURL = decryptedFile.path;
@@ -335,7 +333,7 @@ class OXChat extends OXFlutterModule {
       if (!fileURL.isFileURL) {
         fileURL = 'file://$fileURL';
       }
-      await OXNavigator.pushPage(context, (context) => CommonWebView(fileURL));
+      await OXModuleService.invoke('ox_common', 'gotoWebView', [context, fileURL, null, null, null, null]);
     }
     encryptedFile.delete();
     decryptedFile.delete();
@@ -368,5 +366,13 @@ class OXChat extends OXFlutterModule {
   Future<bool?> showCashuOpenDialog(String cashuToken) async {
     final package = await EcashHelper.createPackageFromCashuToken(cashuToken);
     return EcashOpenDialog.show(package: package, approveOnTap: () { });
+  }
+
+  void addContact(BuildContext context) async {
+    CommunityMenuOptionModel.optionsOnTap(context, OptionModel.AddFriend);
+  }
+
+  void addGroup(BuildContext context) async {
+    CommunityMenuOptionModel.optionsOnTap(context, OptionModel.AddGroup);
   }
 }

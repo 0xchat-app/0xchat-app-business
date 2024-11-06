@@ -9,6 +9,7 @@ import 'package:ox_chat/page/contacts/groups/relay_group_base_info_page.dart';
 import 'package:ox_chat/page/contacts/groups/relay_group_manage_admins_page.dart';
 import 'package:ox_chat/page/contacts/groups/relay_group_request.dart';
 import 'package:ox_chat/page/session/search_page.dart';
+import 'package:ox_chat/utils/chat_session_utils.dart';
 import 'package:ox_chat/utils/group_share_utils.dart';
 import 'package:ox_chat/utils/widget_tool.dart';
 import 'package:ox_chat/widget/chat_history_for_new_members_selector_dialog.dart';
@@ -17,6 +18,7 @@ import 'package:ox_common/log_util.dart';
 import 'package:ox_common/model/chat_type.dart';
 import 'package:ox_common/navigator/navigator.dart';
 import 'package:ox_common/utils/adapt.dart';
+import 'package:ox_common/utils/ox_chat_binding.dart';
 import 'package:ox_common/utils/ox_userinfo_manager.dart';
 import 'package:ox_common/utils/theme_color.dart';
 import 'package:ox_common/widgets/common_appbar.dart';
@@ -50,6 +52,7 @@ class _RelayGroupInfoPageState extends State<RelayGroupInfoPage> {
   bool _hasRemoveUserPermission = false;
   bool _hasAddPermission = false;
   bool _hasEditGroupStatusPermission = false;
+  bool _hasDeleteGroupPermission = false;
   UserDBISAR? userDB;
 
   @override
@@ -70,6 +73,7 @@ class _RelayGroupInfoPageState extends State<RelayGroupInfoPage> {
     _hasRemoveUserPermission = RelayGroup.sharedInstance.hasPermissions(groupDBInfo?.admins ?? [], userDB?.pubKey??'', [GroupActionKind.removeUser]);
     _hasAddPermission = RelayGroup.sharedInstance.hasPermissions(groupDBInfo?.admins ?? [], userDB?.pubKey??'', [GroupActionKind.addPermission]);
     _hasEditGroupStatusPermission = RelayGroup.sharedInstance.hasPermissions(groupDBInfo?.admins ?? [], userDB?.pubKey??'', [GroupActionKind.editGroupStatus]);
+    _hasDeleteGroupPermission = RelayGroup.sharedInstance.hasPermissions(groupDBInfo?.admins ?? [], userDB?.pubKey??'', [GroupActionKind.deleteGroup]);
   }
 
   @override
@@ -443,7 +447,7 @@ class _RelayGroupInfoPageState extends State<RelayGroupInfoPage> {
   }
 
   Widget _leaveBtnWidget() {
-    String content = !_isGroupMember || _hasAddPermission ? Localized.text('ox_chat.delete_and_leave_item') : Localized.text('ox_chat.str_leave_group');
+    String content = !_isGroupMember || _hasDeleteGroupPermission ? Localized.text('ox_chat.delete_and_leave_item') : Localized.text('ox_chat.str_leave_group');
     return GestureDetector(
       child: Container(
         margin: EdgeInsets.only(top: 16.px),
@@ -463,100 +467,8 @@ class _RelayGroupInfoPageState extends State<RelayGroupInfoPage> {
           ),
         ),
       ),
-      onTap: _leaveConfirmWidget,
-    );
-  }
-
-  void _leaveConfirmWidget() {
-    String tips = !_isGroupMember ? Localized.text('ox_common.tips'): (_hasAddPermission
-        ? 'delete_group_tips'.localized() : 'leave_group_tips'.localized());
-    String content = _hasAddPermission ? Localized.text('ox_chat.delete_and_leave_item') : Localized.text('ox_chat.str_leave_group');
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (BuildContext context) {
-        return Material(
-          type: MaterialType.transparency,
-          child: Opacity(
-            opacity: 1,
-            child: Container(
-              alignment: Alignment.bottomCenter,
-              height: Adapt.px(175),
-              decoration: BoxDecoration(
-                color: ThemeColor.color180,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                mainAxisSize: MainAxisSize.max,
-                children: [
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      vertical: Adapt.px(8),
-                    ),
-                    child: Text(
-                      tips,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: Adapt.px(14),
-                        fontWeight: FontWeight.w400,
-                        color: ThemeColor.color100,
-                      ),
-                    ),
-                  ),
-                  Divider(
-                    height: Adapt.px(0.5),
-                    color: ThemeColor.color160,
-                  ),
-                  GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: _leaveGroupFn,
-                    child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.symmetric(
-                        vertical: Adapt.px(17),
-                      ),
-                      child: Text(
-                        content,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: Adapt.px(16),
-                          fontWeight: FontWeight.w400,
-                          color: ThemeColor.red,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Container(
-                    height: Adapt.px(8),
-                    color: ThemeColor.color190,
-                  ),
-                  GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: () {
-                      OXNavigator.pop(context);
-                    },
-                    child: Container(
-                      padding: EdgeInsets.only(
-                        top: Adapt.px(17),
-                      ),
-                      width: double.infinity,
-                      height: Adapt.px(80),
-                      color: ThemeColor.color180,
-                      child: Text(
-                        Localized.text('ox_common.cancel'),
-                        textAlign: TextAlign.center,
-                        style:
-                            TextStyle(fontSize: 16, color: ThemeColor.color0),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
+      onTap: () {
+        ChatSessionUtils.leaveConfirmWidget(context, ChatType.chatRelayGroup, widget.groupId, isGroupMember: _isGroupMember, hasDeleteGroupPermission: _hasDeleteGroupPermission);
       },
     );
   }
@@ -576,7 +488,7 @@ class _RelayGroupInfoPageState extends State<RelayGroupInfoPage> {
       await OXLoading.dismiss();
       if (!event.status) return CommonToast.instance.show(context, event.message);
       setState(() {
-        RelayGroupDBISAR? groupDB = RelayGroup.sharedInstance.groups[widget.groupId];
+        RelayGroupDBISAR? groupDB = RelayGroup.sharedInstance.groups[widget.groupId]?.value;
         if (groupDB != null) {
           groupDBInfo = groupDB;
         }
@@ -599,7 +511,7 @@ class _RelayGroupInfoPageState extends State<RelayGroupInfoPage> {
       await OXLoading.dismiss();
       if (!event.status) return CommonToast.instance.show(context, event.message);
       setState(() {
-        RelayGroupDBISAR? groupDB = RelayGroup.sharedInstance.groups[widget.groupId];
+        RelayGroupDBISAR? groupDB = RelayGroup.sharedInstance.groups[widget.groupId]?.value;
         if (groupDB != null) {
           groupDBInfo = groupDB;
         }
@@ -710,6 +622,7 @@ class _RelayGroupInfoPageState extends State<RelayGroupInfoPage> {
     await OXLoading.dismiss();
     if (result) {
       if (mounted)
+        OXChatBinding.sharedInstance.sessionUpdate();
         setState(() {
           _isMute = value;
         });
@@ -730,24 +643,9 @@ class _RelayGroupInfoPageState extends State<RelayGroupInfoPage> {
     if (result != null && result) _groupInfoInit();
   }
 
-  void _leaveGroupFn() async {
-    OXLoading.show();
-    OKEvent event = await RelayGroup.sharedInstance.leaveGroup(widget.groupId, 'leave group');
-    OXUserInfoManager.sharedInstance.setNotification();
-    if (!event.status) {
-      CommonToast.instance.show(context, event.message);
-      OXLoading.dismiss();
-      return;
-    }
-
-    OXLoading.dismiss();
-    CommonToast.instance.show(context, Localized.text('ox_chat.leave_group_success_toast'));
-    OXNavigator.popToRoot(context);
-  }
-
   void _groupInfoInit() {
     String groupId = widget.groupId;
-    RelayGroupDBISAR? groupDB = RelayGroup.sharedInstance.groups[groupId];
+    RelayGroupDBISAR? groupDB = RelayGroup.sharedInstance.groups[groupId]?.value;
     if (groupDB != null) {
       groupDBInfo = groupDB;
       _isMute = groupDB.mute;

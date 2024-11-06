@@ -149,7 +149,7 @@ class EcashHelper {
     }
   }
 
-  static Future<String?> tryRedeemTokenList(EcashPackage package) async {
+  static Future<(String? errorMsg, bool isRedeemed)> tryRedeemTokenList(EcashPackage package) async {
     final unreceivedToken = package.tokenInfoList
         .where((info) => info.redeemHistory == null)
         .toList()
@@ -170,21 +170,21 @@ class EcashHelper {
       if (response.isSuccess) {
         final history = (await Cashu.getHistory(value: [token])).firstOrNull;
         tokenInfo.redeemHistory = history?.toReceiptHistory();
-        return null;
+        return (null, true);
       }
 
       errorMsg = response.errorMsg;
     }
 
-    if (errorMsg != null) return errorMsg;
+    if (errorMsg != null) return (errorMsg, false);
 
-    return 'ecash_tokens_already_spent'.localized();
+    return ('ecash_tokens_already_spent'.localized(), true);
   }
 
   static Future<String> addSignatureToToken(String token) async {
     return await Cashu.addSignatureToToken(
       ecashString: token,
-      privateKeyList: [Account.sharedInstance.currentPrivkey],
+      pukeyList: [Account.sharedInstance.currentPubkey],
     ) ?? '';
   }
 

@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 import 'package:cashu_dart/cashu_dart.dart';
+import 'package:ox_chat/utils/widget_tool.dart';
 import 'package:ox_common/business_interface/ox_chat/call_message_type.dart';
 import 'package:ox_common/business_interface/ox_chat/custom_message_type.dart';
 import 'package:ox_common/utils/string_utils.dart';
@@ -53,6 +54,7 @@ extension CustomMessageEx on types.CustomMessage {
   }
 
   static Map<String, dynamic> noteMetaData({
+    required String sourceScheme,
     required String authorIcon,
     required String authorName,
     required String authorDNS,
@@ -62,6 +64,7 @@ extension CustomMessageEx on types.CustomMessage {
     required String link,
   }) {
     return _metaData(CustomMessageType.note, {
+      'sourceScheme': sourceScheme,
       'authorIcon': authorIcon,
       'authorName': authorName,
       'authorDNS': authorDNS,
@@ -111,6 +114,7 @@ extension CustomMessageEx on types.CustomMessage {
     int? width,
     int? height,
     String? encryptedKey,
+    required String? encryptedNonce,
   }) {
     return _metaData(CustomMessageType.imageSending, {
       ImageSendingMessageEx.metaFileIdKey: fileId,
@@ -121,6 +125,7 @@ extension CustomMessageEx on types.CustomMessage {
       if (height != null)
         ImageSendingMessageEx.metaHeightKey: height,
       ImageSendingMessageEx.metaEncryptedKey: encryptedKey,
+      ImageSendingMessageEx.metaEncryptedNonce: encryptedNonce,
     });
   }
 
@@ -132,6 +137,7 @@ extension CustomMessageEx on types.CustomMessage {
     int? width,
     int? height,
     String? encryptedKey,
+    String? encryptedNonce,
   }) {
     return _metaData(CustomMessageType.video, {
       VideoMessageEx.metaFileIdKey: fileId,
@@ -142,6 +148,8 @@ extension CustomMessageEx on types.CustomMessage {
         VideoMessageEx.metaWidthKey: width,
       if (height != null)
         VideoMessageEx.metaHeightKey: height,
+      VideoMessageEx.metaEncryptedKey: encryptedKey,
+      VideoMessageEx.metaEncryptedNonce: encryptedNonce,
     });
   }
 
@@ -174,6 +182,15 @@ extension ZapsMessageEx on types.CustomMessage {
 extension CallMessageEx on types.CustomMessage {
   String get callText => metadata?[CustomMessageEx.metaContentKey]?['text'] ?? '';
   CallMessageType? get callType => CallMessageTypeEx.fromValue(metadata?[CustomMessageEx.metaContentKey]?['type']);
+
+  static String? getDescriptionWithMetadata(Map? metadata) {
+    final type = CallMessageTypeEx.fromValue(metadata?[CustomMessageEx.metaContentKey]?['type']);
+    if (type == null) return null;
+    switch (type) {
+      case CallMessageType.audio: return '[${'str_voice_call'.localized()}]';
+      case CallMessageType.video: return '[${'str_video_call'.localized()}]';
+    }
+  }
 }
 
 extension TemplateMessageEx on types.CustomMessage {
@@ -191,6 +208,9 @@ extension NoteMessageEx on types.CustomMessage {
   String get note => metadata?[CustomMessageEx.metaContentKey]?['note'] ?? '';
   String get image => metadata?[CustomMessageEx.metaContentKey]?['image'] ?? '';
   String get link => metadata?[CustomMessageEx.metaContentKey]?['link'] ?? '';
+
+  static String? getSourceSchemeWithMetadata(Map? metadata) =>
+      metadata?[CustomMessageEx.metaContentKey]?['sourceScheme'];
 }
 
 extension EcashMessageEx on types.CustomMessage {
@@ -320,8 +340,8 @@ extension EcashV2MessageEx on types.CustomMessage {
       final info = Cashu.infoOfToken(token);
       if (info == null) return pre;
       if (!isSecretSetupFlag) {
-        final validityDate = info.p2pkInfo?.lockTime ?? '';
-        if (validityDate.isNotEmpty) {
+        final validityDate = info.p2pkInfo?.lockTimeTimestamp;
+        if (validityDate != null) {
           metadata?[CustomMessageEx.metaContentKey]?[EcashV2MessageEx.metaValidityDateKey] = validityDate;
           isSecretSetupFlag = true;
         }
@@ -419,6 +439,7 @@ extension ImageSendingMessageEx on types.CustomMessage {
   static const metaWidthKey = 'width';
   static const metaHeightKey = 'height';
   static const metaEncryptedKey = 'encrypted';
+  static const metaEncryptedNonce = 'encryptedNonce';
 
   String get fileId => metadata?[CustomMessageEx.metaContentKey]?[metaFileIdKey] ?? '';
   String get path => metadata?[CustomMessageEx.metaContentKey]?[metaPathKey] ?? '';
@@ -427,6 +448,9 @@ extension ImageSendingMessageEx on types.CustomMessage {
   int? get width => metadata?[CustomMessageEx.metaContentKey]?[metaWidthKey];
   int? get height => metadata?[CustomMessageEx.metaContentKey]?[metaHeightKey];
   String? get encryptedKey => metadata?[CustomMessageEx.metaContentKey]?[metaEncryptedKey];
+  String? get encryptedNonce => metadata?[CustomMessageEx.metaContentKey]?[metaEncryptedNonce];
+
+  String get uri => path.isNotEmpty ? path : url;
 }
 
 extension VideoMessageEx on types.CustomMessage {
@@ -436,6 +460,8 @@ extension VideoMessageEx on types.CustomMessage {
   static const metaURLKey = 'url';
   static const metaWidthKey = 'width';
   static const metaHeightKey = 'height';
+  static const metaEncryptedKey = 'encrypted';
+  static const metaEncryptedNonce = 'encryptedNonce';
 
   String get fileId => metadata?[CustomMessageEx.metaContentKey]?[metaFileIdKey] ?? '';
   String get snapshotPath => metadata?[CustomMessageEx.metaContentKey]?[metaSnapshotPathKey] ?? '';
@@ -443,8 +469,23 @@ extension VideoMessageEx on types.CustomMessage {
   String get url => metadata?[CustomMessageEx.metaContentKey]?[metaURLKey] ?? '';
   int? get width => metadata?[CustomMessageEx.metaContentKey]?[metaWidthKey];
   int? get height => metadata?[CustomMessageEx.metaContentKey]?[metaHeightKey];
+  String? get encryptedKey => metadata?[CustomMessageEx.metaContentKey]?[metaEncryptedKey];
+  String? get encryptedNonce => metadata?[CustomMessageEx.metaContentKey]?[metaEncryptedNonce];
+
+  bool get isLocalFile => encryptedKey != null || videoPath.isNotEmpty;
+
+  bool get canOpen => isLocalFile ? videoPath.isNotEmpty : url.isNotEmpty;
+
+  String get videoURI {
+    if (!canOpen) return '';
+    return isLocalFile ? videoPath : url;
+  }
 
   void set snapshotPath(String value) {
     metadata?[CustomMessageEx.metaContentKey]?[metaSnapshotPathKey] = value;
+  }
+
+  void set videoPath(String value) {
+    metadata?[CustomMessageEx.metaContentKey]?[metaVideoPathKey] = value;
   }
 }

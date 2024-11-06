@@ -202,7 +202,7 @@
   "disabled_msg_auto_delete_system": "${username} Otomatik silme zamanlayıcısını devre dışı bıraktı",
   "set_normal_dm_system": "${username} Mevcut sohbeti normal DM olarak ayarladı",
   "set_gift_wrapped_dm_system": "${username} Mevcut sohbeti hediye paketli DM olarak ayarladı",
-  "ecash_text": "Ecash",
+  "ecash_text": "Cashu Nuts",
   "ecash_random_amount": "Rastgele Miktar",
   "ecash_identical_amount": "Aynı Miktar",
   "ecash_exclusive": "Özel",
@@ -328,5 +328,14 @@
   "str_group_admin_permission_success_toast": "İzin başarıyla değiştirildi.",
   "str_dm_auto_delete_hint": "Mesajlar ${time} sonra otomatik olarak silinir",
   "delete_message_me_action_mode": "Benim için sil",
-  "delete_message_everyone_action_mode": "Herkes için sil"
+  "delete_message_everyone_action_mode": "Herkes için sil",
+  "str_group_admin_permission_add_fail_toast": "İzin eklenemiyor.",
+  "str_title_new_message": "Yeni Mesaj",
+  "str_mark_as_unread": "Okunmamış olarak işaretle",
+  "str_mark_as_read": "Okunmuş olarak işaretle",
+  "str_delete_contact": "Kişiyi Sil",
+  "str_title_chats": "Sohbetler",
+  "str_title_media": "Medya",
+  "str_online_channels": "Çevrimiçi Kanallar",
+  "str_online_groups": "Çevrimiçi Gruplar"
 }

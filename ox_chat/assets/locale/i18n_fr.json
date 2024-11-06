@@ -202,7 +202,7 @@
   "disabled_msg_auto_delete_system": "${username} a désactivé le minuteur de suppression automatique",
   "set_normal_dm_system": "${username} a défini la conversation actuelle comme DM normal",
   "set_gift_wrapped_dm_system": "${username} a défini la conversation actuelle comme DM emballé cadeau",
-  "ecash_text": "Ecash",
+  "ecash_text": "Cashu Nuts",
   "ecash_random_amount": "Montant Aléatoire",
   "ecash_identical_amount": "Montant Identique",
   "ecash_exclusive": "Exclusif",
@@ -271,7 +271,7 @@
   "str_group_private_description": "Mise en œuvre de salle de discussion NIP-17. Tous les messages sont envoyés individuellement à chaque membre du groupe",
   "str_public_channel_description": "Mise en œuvre de chat public NIP-28. Tout le monde peut rejoindre et envoyer des messages librement",
   "str_group_show_description": "Les informations du groupe sont visibles pour les non-membres",
-  "str_group_hidden_description": "Les informations du groupe sont cachées aux non-membres"
+  "str_group_hidden_description": "Les informations du groupe sont cachées aux non-membres",
   "str_group_type": "Type",
   "str_group_relay": "Relais",
   "str_group_ID": "ID",
@@ -328,5 +328,14 @@
   "str_group_admin_permission_success_toast": "Autorisation modifiée avec succès.",
   "str_dm_auto_delete_hint": "Les messages sont supprimés automatiquement après ${time}",
   "delete_message_me_action_mode": "Supprimer pour moi",
-  "delete_message_everyone_action_mode": "Supprimer pour tout le monde"
+  "delete_message_everyone_action_mode": "Supprimer pour tout le monde",
+  "str_group_admin_permission_add_fail_toast": "Impossible d'ajouter l'autorisation.",
+  "str_title_new_message": "Nouveau Message",
+  "str_mark_as_unread": "Marquer comme non lu",
+  "str_mark_as_read": "Marquer comme lu",
+  "str_delete_contact": "Supprimer le contact",
+  "str_title_chats": "Discussions",
+  "str_title_media": "Médias",
+  "str_online_channels": "Canaux en ligne",
+  "str_online_groups": "Groupes en ligne"
 }

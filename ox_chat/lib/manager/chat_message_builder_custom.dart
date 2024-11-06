@@ -548,16 +548,18 @@ extension ChatMessageBuilderCustomEx on ChatMessageBuilder {
     types.CustomMessage message,
     int messageWidth,
     Widget reactionWidget,
+    String? receiverPubkey,
   ) {
-    final path = ImageSendingMessageEx(message).path;
+    final uri = ImageSendingMessageEx(message).uri;
     final url = ImageSendingMessageEx(message).url;
     final fileId = ImageSendingMessageEx(message).fileId;
     var width = ImageSendingMessageEx(message).width;
     var height = ImageSendingMessageEx(message).height;
     final encryptedKey = ImageSendingMessageEx(message).encryptedKey;
+    final encryptedNonce = ImageSendingMessageEx(message).encryptedNonce;
     final stream = fileId.isEmpty || url.isNotEmpty
         ? null
-        : UploadManager.shared.getUploadProgress(fileId);
+        : UploadManager.shared.getUploadProgress(fileId, receiverPubkey);
 
     if (width == null || height == null) {
       try {
@@ -570,17 +572,18 @@ extension ChatMessageBuilderCustomEx on ChatMessageBuilder {
 
     Widget widget = Hero(
       tag: message.id,
-      child: ImagePreviewWidget(
-        uri: path.isNotEmpty ? path : url,
+      child: ChatImagePreviewWidget(
+        uri: uri,
         imageWidth: width,
         imageHeight: height,
         maxWidth: messageWidth,
         progressStream: stream,
         decryptKey: encryptedKey,
+        decryptNonce: encryptedNonce,
       ),
     );
 
-    if (message.reactions.isNotEmpty) {
+    if (message.hasReactions) {
       widget = Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -612,62 +615,15 @@ extension ChatMessageBuilderCustomEx on ChatMessageBuilder {
     types.CustomMessage message,
     int messageWidth,
     Widget reactionWidget,
+    String? receiverPubkey,
+    Function(types.Message newMessage)? messageUpdateCallback,
   ) {
-    final url = VideoMessageEx(message).url;
-    var snapshotPath = VideoMessageEx(message).snapshotPath;
-    final fileId = VideoMessageEx(message).fileId;
-    var width = VideoMessageEx(message).width;
-    var height = VideoMessageEx(message).height;
-    final stream = fileId.isEmpty || url.isNotEmpty
-        ? null
-        : UploadManager.shared.getUploadProgress(fileId);
-
-    if (width == null || height == null) {
-      try {
-        final uri = Uri.parse(url);
-        final query = uri.queryParameters;
-        width ??= int.tryParse(query['width'] ?? query['w'] ?? '');
-        height ??= int.tryParse(query['height'] ?? query['h'] ?? '');
-      } catch (_) { }
-    }
-
-    if (snapshotPath.isEmpty) {
-      if (url.isNotEmpty) {
-        snapshotPath = OXVideoUtils.getVideoThumbnailImageFromMem(videoURL: url)?.path ?? '';
-      } else if (fileId.isNotEmpty) {
-        snapshotPath = OXVideoUtils.getVideoThumbnailImageFromMem(cacheKey: fileId)?.path ?? '';
-      }
-    }
-
-    Widget snapshotBuilder(String imagePath) {
-      return ImagePreviewWidget(
-        uri: imagePath,
-        imageWidth: width,
-        imageHeight: height,
-        maxWidth: messageWidth,
-        progressStream: stream,
-      );
-    }
-
-    return Stack(
-      children: [
-        if (snapshotPath.isNotEmpty)
-          snapshotBuilder(snapshotPath)
-        else
-          FutureBuilder(
-            future: OXVideoUtils.getVideoThumbnailImage(videoURL: url),
-            builder: (context, snapshot) {
-              final snapshotPath = snapshot.data?.path ?? '';
-              return snapshotBuilder(snapshotPath);
-            },
-          ),
-        if (url.isNotEmpty)
-          Positioned.fill(
-            child: Center(
-              child: Icon(Icons.play_circle, size: 60.px,)
-            ),
-          ),
-      ],
+    return ChatVideoMessage(
+      message: message,
+      messageWidth: messageWidth,
+      reactionWidget: reactionWidget,
+      receiverPubkey: receiverPubkey,
+      messageUpdateCallback: messageUpdateCallback,
     );
   }
 }

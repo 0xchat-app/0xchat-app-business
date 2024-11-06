@@ -52,7 +52,7 @@ class ChatNostrSchemeHandle {
 
   static Future<ChannelDBISAR> _loadChannelOnline(Channel channel) async {
     ChannelDBISAR? channelDB = await Channels.sharedInstance
-        .updateChannelMetadataFromRelay(channel.owner, channel.channelId);
+        .updateChannelMetadataFromRelay(channel.owner, [channel.channelId]);
     return channelDB ?? ChannelDBISAR(channelId: channel.channelId);
   }
 
@@ -92,7 +92,7 @@ class ChatNostrSchemeHandle {
       case 40:
         if (Channels.sharedInstance.channels.containsKey(eventId)) {
           return channelToMessageContent(
-              Channels.sharedInstance.channels[eventId]);
+              Channels.sharedInstance.channels[eventId]?.value);
         } else if (event != null) {
           Channel channel = Nip28.getChannelCreation(event);
           ChannelDBISAR channelDB =
@@ -116,7 +116,7 @@ class ChatNostrSchemeHandle {
         RelayGroupDBISAR? relayGroupDB;
         if (RelayGroup.sharedInstance.groups.containsKey(eventId)) {
            relayGroupDB =
-              RelayGroup.sharedInstance.groups[eventId];
+              RelayGroup.sharedInstance.groups[eventId]?.value;
         }
         if(relays != null && relays.isNotEmpty){
           relayGroupDB = await RelayGroup.sharedInstance
@@ -226,7 +226,6 @@ class ChatNostrSchemeHandle {
       userDB =
           await Account.sharedInstance.reloadProfileFromRelay(noteDB.author);
     }
-    ;
 
     // String resultString = nostrScheme.replaceFirst('nostr:', "");
     // final url = '${CommonConstant.njumpURL}${resultString}';
@@ -234,7 +233,9 @@ class ChatNostrSchemeHandle {
         await OXDiscoveryInterface.getJumpMomentPageUri(noteDB.noteId);
     Map<String, dynamic> map = {};
     map['type'] = '4';
+
     map['content'] = {
+      'sourceScheme': noteDB.encodedNoteId,
       'authorIcon': '${userDB?.picture}',
       'authorName': '${userDB?.name}',
       'authorDNS': '${userDB?.dns}',

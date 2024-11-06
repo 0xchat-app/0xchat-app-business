@@ -1,7 +1,6 @@
 import 'package:chatcore/chat-core.dart';
-import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 import 'package:nostr_core_dart/nostr.dart';
-import 'package:ox_chat/manager/chat_data_cache.dart';
+import 'package:ox_chat/manager/chat_data_manager_models.dart';
 import 'package:ox_chat/utils/chat_log_utils.dart';
 import 'package:ox_common/model/chat_session_model_isar.dart';
 import 'package:ox_common/model/chat_type.dart';
@@ -11,7 +10,7 @@ import 'package:ox_common/utils/string_utils.dart';
 class ChatStrategyFactory {
   static ChatStrategy getStrategy(ChatSessionModelISAR session) {
     var s = OXChatBinding.sharedInstance.sessionMap[session.chatId];
-    if(s != null) session = s;
+    if (s != null) session = s;
     switch (session.chatType) {
       case ChatType.chatGroup:
         return GroupChatStrategy(session);
@@ -47,7 +46,7 @@ abstract class ChatStrategy {
     required MessageType messageType,
     required String contentString,
     required String replayId,
-    String? decryptSecret,
+    EncryptedFile? encryptedFile,
     String? source,
   });
 
@@ -55,7 +54,7 @@ abstract class ChatStrategy {
     required MessageType messageType,
     required String contentString,
     required String replayId,
-    String? decryptSecret,
+    EncryptedFile? encryptedFile,
     bool isLocal = false,
     Event? event,
     String? replaceMessageId,
@@ -75,7 +74,7 @@ class ChannelChatStrategy extends ChatStrategy {
     required MessageType messageType,
     required String contentString,
     required String replayId,
-    String? decryptSecret,
+    EncryptedFile? encryptedFile,
     String? source,
   }) async {
     return Channels.sharedInstance.getSendChannelMessageEvent(
@@ -83,7 +82,6 @@ class ChannelChatStrategy extends ChatStrategy {
       messageType,
       contentString,
       replyMessage: replayId,
-      decryptSecret: decryptSecret,
       source: source,
     );
   }
@@ -93,7 +91,7 @@ class ChannelChatStrategy extends ChatStrategy {
     required MessageType messageType,
     required String contentString,
     required String replayId,
-    String? decryptSecret,
+    EncryptedFile? encryptedFile,
     bool isLocal = false,
     Event? event,
     String? replaceMessageId,
@@ -105,7 +103,6 @@ class ChannelChatStrategy extends ChatStrategy {
       contentString,
       event: event,
       local: isLocal,
-      decryptSecret: decryptSecret,
       replaceMessageId: replaceMessageId,
     );
   }
@@ -124,7 +121,7 @@ class GroupChatStrategy extends ChatStrategy {
     required MessageType messageType,
     required String contentString,
     required String replayId,
-    String? decryptSecret,
+    EncryptedFile? encryptedFile,
     String? source,
   }) async {
     return Groups.sharedInstance.getSendPrivateGroupMessageEvent(
@@ -132,7 +129,7 @@ class GroupChatStrategy extends ChatStrategy {
       messageType,
       contentString,
       replyMessage: replayId,
-      decryptSecret: decryptSecret,
+      encryptedFile: encryptedFile,
       source: source,
     );
   }
@@ -142,7 +139,7 @@ class GroupChatStrategy extends ChatStrategy {
     required MessageType messageType,
     required String contentString,
     required String replayId,
-    String? decryptSecret,
+    EncryptedFile? encryptedFile,
     bool isLocal = false,
     Event? event,
     String? replaceMessageId,
@@ -154,7 +151,7 @@ class GroupChatStrategy extends ChatStrategy {
       contentString,
       event: event,
       local: isLocal,
-      decryptSecret: decryptSecret,
+      encryptedFile: encryptedFile,
       replaceMessageId: replaceMessageId,
     );
   }
@@ -170,7 +167,7 @@ class PrivateChatStrategy extends ChatStrategy {
     required MessageType messageType,
     required String contentString,
     required String replayId,
-    String? decryptSecret,
+    EncryptedFile? encryptedFile,
     String? source,
   }) async {
     return await Contacts.sharedInstance.getSendMessageEvent(
@@ -180,7 +177,7 @@ class PrivateChatStrategy extends ChatStrategy {
       contentString,
       kind: session.messageKind,
       expiration: session.expiration,
-      decryptSecret: decryptSecret,
+      encryptedFile: encryptedFile,
       source: source,
     );
   }
@@ -190,7 +187,7 @@ class PrivateChatStrategy extends ChatStrategy {
     required MessageType messageType,
     required String contentString,
     required String replayId,
-    String? decryptSecret,
+    EncryptedFile? encryptedFile,
     bool isLocal = false,
     Event? event,
     String? replaceMessageId,
@@ -204,7 +201,7 @@ class PrivateChatStrategy extends ChatStrategy {
       kind: session.messageKind,
       expiration: session.expiration,
       local: isLocal,
-      decryptSecret: decryptSecret,
+      encryptedFile: encryptedFile,
       replaceMessageId: replaceMessageId,
     );
   }
@@ -220,7 +217,7 @@ class SecretChatStrategy extends ChatStrategy {
     required MessageType messageType,
     required String contentString,
     required String replayId,
-    String? decryptSecret,
+    EncryptedFile? encryptedFile,
     String? source,
   }) async {
     return await Contacts.sharedInstance.getSendSecretMessageEvent(
@@ -230,7 +227,7 @@ class SecretChatStrategy extends ChatStrategy {
       messageType,
       contentString,
       session.expiration,
-      decryptSecret: decryptSecret,
+      encryptedFile: encryptedFile,
       source: source,
     );
   }
@@ -240,7 +237,7 @@ class SecretChatStrategy extends ChatStrategy {
     required MessageType messageType,
     required String contentString,
     required String replayId,
-    String? decryptSecret,
+    EncryptedFile? encryptedFile,
     bool isLocal = false,
     Event? event,
     String? replaceMessageId,
@@ -253,7 +250,7 @@ class SecretChatStrategy extends ChatStrategy {
       contentString,
       event: event,
       local: isLocal,
-      decryptSecret: decryptSecret,
+      encryptedFile: encryptedFile,
       replaceMessageId: replaceMessageId,
     );
   }
@@ -272,27 +269,16 @@ class RelayGroupChatStrategy extends ChatStrategy {
     required MessageType messageType,
     required String contentString,
     required String replayId,
-    String? decryptSecret,
+    EncryptedFile? encryptedFile,
     String? source,
   }) async {
-    List<String> previous = [];
-    final List<types.Message> uiMsgList = await ChatDataCache.shared.getSessionMessage(session: session);
-    for (types.Message message in uiMsgList) {
-      final messageId = message.remoteId;
-      if (messageId != null && messageId.isNotEmpty) {
-        previous.add(messageId.substring(0, 8));
-      }
-      if (previous.length ==3){
-        break;
-      }
-    }
+    List<String> previous = await createPrevious();
     return RelayGroup.sharedInstance.getSendGroupMessageEvent(
       receiverId,
       messageType,
       contentString,
       previous,
       rootEvent: replayId,
-      decryptSecret: decryptSecret,
       source: source,
     );
   }
@@ -302,22 +288,12 @@ class RelayGroupChatStrategy extends ChatStrategy {
     required MessageType messageType,
     required String contentString,
     required String replayId,
-    String? decryptSecret,
+    EncryptedFile? encryptedFile,
     bool isLocal = false,
     Event? event,
     String? replaceMessageId,
   }) async {
-    List<String> previous = [];
-    final List<types.Message> uiMsgList = await ChatDataCache.shared.getSessionMessage(session: session);
-    for (types.Message message in uiMsgList) {
-      final messageId = message.remoteId;
-      if (messageId != null && messageId.isNotEmpty) {
-        previous.add(messageId.substring(0, 8));
-      }
-      if (previous.length ==3){
-        break;
-      }
-    }
+    List<String> previous = await createPrevious();
     return RelayGroup.sharedInstance.sendGroupMessage(
       receiverId,
       messageType,
@@ -326,9 +302,34 @@ class RelayGroupChatStrategy extends ChatStrategy {
       event: event,
       local: isLocal,
       rootEvent: replayId,
-      decryptSecret: decryptSecret,
       replaceMessageId: replaceMessageId,
     );
+  }
+
+  Future<List<String>> createPrevious() async {
+    List<String> previous = [];
+    final allMessages = await _getAllLocalMessage();
+    for (var message in allMessages) {
+      final messageId = message.messageId;
+      if (messageId.isNotEmpty) {
+        previous.add(messageId.substring(0, 8));
+      }
+      if (previous.length == 3) {
+        break;
+      }
+    }
+    return previous;
+  }
+
+  Future<List<MessageDBISAR>> _getAllLocalMessage() async {
+    final params = session.chatTypeKey?.messageLoaderParams;
+    if (params == null) return [];
+    return (await Messages.loadMessagesFromDB(
+          receiver: params.receiver,
+          groupId: params.groupId,
+          sessionId: params.sessionId,
+        ))['messages'] ??
+        <MessageDBISAR>[];
   }
 }
 

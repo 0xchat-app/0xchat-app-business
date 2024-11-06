@@ -5,7 +5,8 @@ import 'package:chatcore/chat-core.dart';
 import 'package:ox_chat/manager/chat_message_helper.dart';
 import 'package:ox_chat/utils/custom_message_utils.dart';
 import 'package:ox_chat/utils/widget_tool.dart';
-import 'package:ox_chat/widget/image_preview_widget.dart';
+import 'package:ox_chat/widget/chat_video_message.dart';
+import 'package:ox_chat/widget/chat_image_preview_widget.dart';
 import 'package:ox_common/business_interface/ox_chat/call_message_type.dart';
 import 'package:ox_common/business_interface/ox_chat/custom_message_type.dart';
 import 'package:ox_common/business_interface/ox_chat/utils.dart';
@@ -28,29 +29,36 @@ part 'chat_message_builder_reaction.dart';
 
 class ChatMessageBuilder {
 
-  static Widget buildRepliedMessageView(types.Message message,
-      {required int messageWidth}) {
+  static Widget buildRepliedMessageView(types.Message message, {
+    required int messageWidth,
+    Function(types.Message? message)? onTap,
+  }) {
+    final repliedMessageId = message.repliedMessageId;
+    if (repliedMessageId == null || repliedMessageId.isEmpty) return SizedBox();
+
     final repliedMessage = message.repliedMessage;
-    if (repliedMessage == null) return SizedBox();
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxWidth: messageWidth.toDouble(),
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(Adapt.px(12)),
-          color: ThemeColor.color190,
+    return GestureDetector(
+      onTap: () => onTap?.call(repliedMessage),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: messageWidth.toDouble(),
         ),
-        margin: EdgeInsets.only(top: Adapt.px(2)),
-        padding: EdgeInsets.symmetric(
-            horizontal: Adapt.px(12), vertical: Adapt.px(4)),
-        child: Text(
-          repliedMessage.replyDisplayContent,
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: ThemeColor.color120,
-            fontSize: 12,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(Adapt.px(12)),
+            color: ThemeColor.color190,
+          ),
+          margin: EdgeInsets.only(top: Adapt.px(2)),
+          padding: EdgeInsets.symmetric(
+              horizontal: Adapt.px(12), vertical: Adapt.px(4)),
+          child: Text(
+            repliedMessage?.replyDisplayContent ?? '[Not Found]',
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: ThemeColor.color120,
+              fontSize: 12,
+            ),
           ),
         ),
       ),
@@ -71,12 +79,13 @@ class ChatMessageBuilder {
   static Widget buildImageMessage(types.ImageMessage message, {
     required int messageWidth,
   }) {
-    return ImagePreviewWidget(
+    return ChatImagePreviewWidget(
       uri: message.uri,
       imageWidth: message.width?.toInt(),
       imageHeight: message.height?.toInt(),
       maxWidth: messageWidth,
       decryptKey: message.decryptKey,
+      decryptNonce: message.decryptNonce
     );
   }
 
@@ -84,6 +93,8 @@ class ChatMessageBuilder {
     required types.CustomMessage message,
     required int messageWidth,
     required Widget reactionWidget,
+    String? receiverPubkey,
+    Function(types.Message newMessage)? messageUpdateCallback,
   }) {
     final isMe = OXUserInfoManager.sharedInstance.currentUserInfo?.pubKey == message.author.id;
     final type = message.customType;
@@ -102,9 +113,9 @@ class ChatMessageBuilder {
       case CustomMessageType.ecashV2:
         return ChatMessageBuilderCustomEx._buildEcashV2Message(message, reactionWidget);
       case CustomMessageType.imageSending:
-        return ChatMessageBuilderCustomEx._buildImageSendingMessage(message, messageWidth, reactionWidget);
+        return ChatMessageBuilderCustomEx._buildImageSendingMessage(message, messageWidth, reactionWidget, receiverPubkey);
       case CustomMessageType.video:
-        return ChatMessageBuilderCustomEx._buildVideoMessage(message, messageWidth, reactionWidget);
+        return ChatMessageBuilderCustomEx._buildVideoMessage(message, messageWidth, reactionWidget, receiverPubkey, messageUpdateCallback);
       default:
         return SizedBox();
     }

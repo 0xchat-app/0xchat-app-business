@@ -1,10 +1,14 @@
 
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
+import 'package:flutter_vibrate/flutter_vibrate.dart';
 import 'package:ox_common/utils/adapt.dart';
 import 'package:ox_common/utils/theme_color.dart';
 import 'package:ox_common/utils/web_url_helper.dart';
 import 'package:ox_common/utils/widget_tool.dart';
+import 'package:ox_common/widgets/common_image.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 import '../../../ox_chat_ui.dart';
@@ -58,6 +62,7 @@ class Message extends StatefulWidget {
     this.repliedMessageBuilder,
     this.longPressWidgetBuilder,
     this.reactionViewBuilder,
+    this.replySwipeTriggerCallback,
   });
 
   /// Build an audio message inside predefined bubble.
@@ -192,17 +197,37 @@ class Message extends StatefulWidget {
   /// Create a widget that pops up when long pressing on a message
   final Widget Function(BuildContext context, types.Message, CustomPopupMenuController controller)? longPressWidgetBuilder;
 
+  final Function(types.Message)? replySwipeTriggerCallback;
+
   @override
-  State<Message> createState() => _MessageState();
+  State<Message> createState() => MessageState();
 }
 
-
-
-class _MessageState extends State<Message> {
+class MessageState extends State<Message> {
 
   final CustomPopupMenuController _popController = CustomPopupMenuController();
 
   double get horizontalPadding => 12.px;
+  double get avatarPadding => 8.px;
+  double get avatarSize => 40.px; // Keep equal to avatarBuilder widget size
+  double get statusSize => 20.px;
+  double get statusPadding => 8.px;
+  double get messageGapPadding => 50.px;
+  int get contentMaxWidth =>
+      (widget.messageWidth.toDouble()
+      - avatarSize
+      - avatarPadding
+      - horizontalPadding
+      - statusSize
+      - statusPadding
+      - messageGapPadding).floor();
+
+  Duration get flashDisplayDuration => const Duration(milliseconds: 300);
+  Duration get flashDismissDuration => const Duration(milliseconds: 1000);
+  late Duration flashDuration = flashDisplayDuration;
+
+  Color get flashColor => ThemeColor.color190;
+  late Color flashBackgroundColor = flashColor.withOpacity(0);
 
   @override
   Widget build(BuildContext context) {
@@ -240,12 +265,50 @@ class _MessageState extends State<Message> {
       );
     }
 
-    return Container(
-      alignment: alignment,
-      margin: margin,
-      child: _buildMessageContentView(),
+    Widget content = AnimatedContainer(
+      duration: flashDuration,
+      curve: Curves.easeIn,
+      color: flashBackgroundColor,
+      child: Container(
+        alignment: alignment,
+        margin: margin,
+        child: _buildMessageContentView(),
+      ),
     );
+
+    if (!currentUserIsAuthor && widget.replySwipeTriggerCallback != null) {
+      content = _SwipeToReply(
+        revealIconBuilder: (progress) => Opacity(
+          opacity: progress,
+          child: Transform.scale(
+            scale: progress,
+            child: _buildSwipeQuoteIcon(),
+          ),
+        ),
+        onSwipeComplete: () {
+          widget.replySwipeTriggerCallback?.call(widget.message);
+        },
+        child: content,
+      );
+    }
+
+    return content;
   }
+
+  Widget _buildSwipeQuoteIcon() => Container(
+    width: 32.px,
+    height: 32.px,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(16.px),
+      color: ThemeColor.color180,
+    ),
+    alignment: Alignment.center,
+    child: CommonImage(
+      iconName: 'icon_message_swipe_quote.png',
+      size: 16.px,
+      package: 'ox_chat_ui',
+    ),
+  );
 
   // avatar & name & message
   Widget _buildMessageContentView() {
@@ -261,12 +324,9 @@ class _MessageState extends State<Message> {
       children: [
         if (!currentUserIsAuthor && avatarBuilder != null)
           _avatarBuilder(avatarBuilder(widget.message)).setPaddingOnly(
-            right: 8.px,
+            right: avatarPadding,
           ),
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: widget.messageWidth.toDouble(),
-          ),
+        Flexible(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -276,7 +336,7 @@ class _MessageState extends State<Message> {
         ),
         if (currentUserIsAuthor && avatarBuilder != null)
           _avatarBuilder(avatarBuilder(widget.message)).setPaddingOnly(
-            left: 8.px,
+            left: avatarPadding,
           ),
       ],
     );
@@ -377,7 +437,10 @@ class _MessageState extends State<Message> {
 
     Widget bubble;
 
-    final useBubbleBg = !widget.message.viewWithoutBubble;
+    var useBubbleBg = !widget.message.viewWithoutBubble;
+    if (enlargeEmojis) {
+      useBubbleBg = widget.message.hasReactions;
+    }
 
     if (widget.bubbleBuilder != null) {
       bubble = widget.bubbleBuilder!(
@@ -385,8 +448,6 @@ class _MessageState extends State<Message> {
         message: widget.message,
         nextMessageInGroup: widget.roundBorder,
       );
-    } else if (enlargeEmojis && widget.hideBackgroundOnEmojiMessages) {
-      bubble = _messageBuilder(context);
     } else {
       bubble = Container(
         decoration: useBubbleBg ? BoxDecoration(
@@ -413,8 +474,8 @@ class _MessageState extends State<Message> {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         if (currentUserIsAuthor)
-          _buildStatusWidget().setPaddingOnly(right: 8.px),
-        if (widget.message.repliedMessage == null)
+          _buildStatusWidget().setPaddingOnly(right: statusPadding),
+        if (widget.message.repliedMessageId == null || widget.message.repliedMessageId!.isEmpty)
           Flexible(child: bubble,)
         else
           Flexible(
@@ -427,7 +488,7 @@ class _MessageState extends State<Message> {
                     alignment: Alignment.centerLeft,
                     child: widget.repliedMessageBuilder?.call(
                       widget.message,
-                      messageWidth: widget.messageWidth,
+                      messageWidth: contentMaxWidth,
                     ),
                   ),
                 ],
@@ -435,7 +496,7 @@ class _MessageState extends State<Message> {
             ),
           ),
         if (!currentUserIsAuthor)
-          _buildStatusWidget().setPaddingOnly(left: 8.px),
+          _buildStatusWidget().setPaddingOnly(left: statusPadding),
       ],
     );
   }
@@ -447,7 +508,7 @@ class _MessageState extends State<Message> {
       widget.onMessageStatusTap?.call(context, widget.message);
     },
     child: widget.customStatusBuilder?.call(widget.message, context: context)
-        ?? MessageStatus(status: widget.message.status),
+        ?? MessageStatus(size: statusSize, status: widget.message.status),
   );
 
   Widget _messageBuilder(BuildContext context, [bool addReaction = false]) {
@@ -457,7 +518,7 @@ class _MessageState extends State<Message> {
         final audioMessage = widget.message as types.AudioMessage;
         messageContentWidget = widget.audioMessageBuilder?.call(
           audioMessage,
-          messageWidth: widget.messageWidth,
+          messageWidth: contentMaxWidth,
         ) ?? AudioMessagePage(
               message: audioMessage,
               fetchAudioFile: widget.onAudioDataFetched,
@@ -470,7 +531,7 @@ class _MessageState extends State<Message> {
         final customMessage = widget.message as types.CustomMessage;
         messageContentWidget = widget.customMessageBuilder?.call(
           message: customMessage,
-          messageWidth: widget.messageWidth,
+          messageWidth: contentMaxWidth,
           reactionWidget: _reactionViewBuilder(),
         ) ?? const SizedBox();
         break ;
@@ -478,25 +539,25 @@ class _MessageState extends State<Message> {
         final fileMessage = widget.message as types.FileMessage;
         messageContentWidget = widget.fileMessageBuilder?.call(
           fileMessage,
-          messageWidth: widget.messageWidth,
+          messageWidth: contentMaxWidth,
         ) ?? FileMessage(message: fileMessage);
         break ;
       case types.MessageType.image:
         final imageMessage = widget.message as types.ImageMessage;
         messageContentWidget = widget.imageMessageBuilder?.call(
           imageMessage,
-          messageWidth: widget.messageWidth,
+          messageWidth: contentMaxWidth,
         ) ?? ImageMessage(
               imageHeaders: widget.imageHeaders,
               message: imageMessage,
-              messageWidth: widget.messageWidth,
+              messageWidth: contentMaxWidth,
             );
         break ;
       case types.MessageType.text:
         final textMessage = widget.message as types.TextMessage;
         messageContentWidget = widget.textMessageBuilder?.call(
           textMessage,
-          messageWidth: widget.messageWidth,
+          messageWidth: contentMaxWidth,
           showName: widget.showName,
         ) ?? TextMessage(
           emojiEnlargementBehavior: widget.emojiEnlargementBehavior,
@@ -515,16 +576,23 @@ class _MessageState extends State<Message> {
         final videoMessage = widget.message as types.VideoMessage;
         messageContentWidget = widget.videoMessageBuilder?.call(
           videoMessage,
-          messageWidth: widget.messageWidth,
+          messageWidth: contentMaxWidth,
         ) ?? VideoMessage(
               imageHeaders: widget.imageHeaders,
               message: videoMessage,
-              messageWidth: widget.messageWidth,
+              messageWidth: contentMaxWidth,
             );
         break ;
       default:
         return const SizedBox();
     }
+
+    messageContentWidget = ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: contentMaxWidth.toDouble(),
+      ),
+      child: messageContentWidget,
+    );
 
     if (addReaction) {
       messageContentWidget = _reactionWrapper(messageContentWidget);
@@ -544,7 +612,132 @@ class _MessageState extends State<Message> {
 
   Widget _reactionViewBuilder() => widget.reactionViewBuilder?.call(
     widget.message,
-    messageWidth: widget.messageWidth,
+    messageWidth: contentMaxWidth,
   ) ?? const SizedBox();
+
+  void flash() {
+    setState(() {
+      flashBackgroundColor = flashColor;
+      flashDuration = flashDisplayDuration;
+    });
+    Future.delayed(flashDisplayDuration, () {
+      setState(() {
+        flashBackgroundColor = flashColor.withOpacity(0.0);
+        flashDuration = flashDismissDuration;
+      });
+    });
+  }
 }
 
+class _SwipeToReply extends StatefulWidget {
+  final Widget child;
+  final Widget Function(double progress) revealIconBuilder;
+  final VoidCallback onSwipeComplete;
+
+  const _SwipeToReply({
+    super.key,
+    required this.child,
+    required this.revealIconBuilder,
+    required this.onSwipeComplete,
+  });
+
+  @override
+  _SwipeToReplyState createState() => _SwipeToReplyState();
+}
+
+class _SwipeToReplyState extends State<_SwipeToReply>
+    with SingleTickerProviderStateMixin {
+  double _dragDistance = 0.0;
+  double get swipeDistance => _dragDistance.abs();
+  late AnimationController _controller;
+
+  bool hasFeedback = false;
+
+  double get triggerOffset => 60.px;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      value: 1.0,
+      duration: const Duration(milliseconds: 100),
+    )..addListener(() {
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    setState(() {
+      _dragDistance += details.primaryDelta ?? 0;
+      // Only can left drag
+      if (_dragDistance > 0) {
+        _dragDistance = 0;
+      }
+
+      // Feedback
+      if (!hasFeedback && swipeDistance >= triggerOffset) {
+        hasFeedback = true;
+        Vibrate.feedback(FeedbackType.impact);
+      }
+    });
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    if (swipeDistance >= triggerOffset) {
+      widget.onSwipeComplete();
+    }
+
+    // Rebound
+    _controller.reverse(from: 1.0).then((_) {
+      setState(() {
+        _dragDistance = 0.0;
+      });
+      _controller.value = 1.0;
+      hasFeedback = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = (swipeDistance / triggerOffset).clamp(0.0, 1.0);
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        var distance = 0.0;
+        if (swipeDistance > triggerOffset) {
+          distance = (swipeDistance - triggerOffset) * 0.3 + triggerOffset;
+        } else {
+          distance = swipeDistance;
+        }
+
+        final offset = _controller.value * -distance;
+        return Stack(
+          children: [
+            Positioned(
+              right: 10 - offset,
+              top: 0,
+              bottom: 0,
+              child: Center(child: widget.revealIconBuilder(progress)),
+            ),
+            Transform.translate(
+              offset: Offset(offset, 0),
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragUpdate: _onHorizontalDragUpdate,
+                onHorizontalDragEnd: _onHorizontalDragEnd,
+                child: widget.child,
+              ),
+            )
+          ],
+        );
+      },
+    );
+  }
+}

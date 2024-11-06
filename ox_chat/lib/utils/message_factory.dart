@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'dart:math';
 
@@ -28,6 +27,7 @@ abstract class MessageFactory {
     String? repliedMessageId,
     String? previewData,
     String? decryptKey,
+    String? decryptNonce,
     int? expiration,
     List<types.Reaction> reactions = const [],
     List<types.ZapsInfo> zapsInfoList = const [],
@@ -49,6 +49,7 @@ class TextMessageFactory implements MessageFactory {
     String? repliedMessageId,
     String? previewData,
     String? decryptKey,
+    String? decryptNonce,
     int? expiration,
     List<types.Reaction> reactions = const [],
     List<types.ZapsInfo> zapsInfoList = const [],
@@ -65,9 +66,7 @@ class TextMessageFactory implements MessageFactory {
       status: status,
       repliedMessage: repliedMessage,
       repliedMessageId: repliedMessageId,
-      previewData: previewData != null
-          ? PreviewData.fromJson(jsonDecode(previewData))
-          : null,
+      previewData: previewData != null ? PreviewData.fromJson(jsonDecode(previewData)) : null,
       expiration: expiration,
       reactions: reactions,
       zapsInfoList: zapsInfoList,
@@ -90,6 +89,7 @@ class ImageMessageFactory implements MessageFactory {
     String? repliedMessageId,
     String? previewData,
     String? decryptKey,
+    String? decryptNonce,
     int? expiration,
     List<types.Reaction> reactions = const [],
     List<types.ZapsInfo> zapsInfoList = const [],
@@ -113,6 +113,7 @@ class ImageMessageFactory implements MessageFactory {
       repliedMessageId: repliedMessageId,
       fileEncryptionType: fileEncryptionType,
       decryptKey: decryptKey,
+      decryptNonce: decryptNonce,
       expiration: expiration,
       reactions: reactions,
       zapsInfoList: zapsInfoList,
@@ -135,6 +136,7 @@ class AudioMessageFactory implements MessageFactory {
     String? repliedMessageId,
     String? previewData,
     String? decryptKey,
+    String? decryptNonce,
     int? expiration,
     List<types.Reaction> reactions = const [],
     List<types.ZapsInfo> zapsInfoList = const [],
@@ -159,6 +161,7 @@ class AudioMessageFactory implements MessageFactory {
       repliedMessageId: repliedMessageId,
       fileEncryptionType: fileEncryptionType,
       decryptKey: decryptKey,
+      decryptNonce: decryptNonce,
       expiration: expiration,
       reactions: reactions,
       zapsInfoList: zapsInfoList,
@@ -181,6 +184,7 @@ class VideoMessageFactory implements MessageFactory {
     String? repliedMessageId,
     String? previewData,
     String? decryptKey,
+    String? decryptNonce,
     int? expiration,
     List<types.Reaction> reactions = const [],
     List<types.ZapsInfo> zapsInfoList = const [],
@@ -209,6 +213,7 @@ class VideoMessageFactory implements MessageFactory {
       repliedMessageId: repliedMessageId,
       fileEncryptionType: fileEncryptionType,
       decryptKey: decryptKey,
+      decryptNonce: decryptNonce,
       expiration: expiration,
       reactions: reactions,
       zapsInfoList: zapsInfoList,
@@ -231,6 +236,7 @@ class CallMessageFactory implements MessageFactory {
     String? repliedMessageId,
     String? previewData,
     String? decryptKey,
+    String? decryptNonce,
     int? expiration,
     List<types.Reaction> reactions = const [],
     List<types.ZapsInfo> zapsInfoList = const [],
@@ -243,20 +249,18 @@ class CallMessageFactory implements MessageFactory {
       if (contentMap is! Map) return null;
     } catch (_) {}
 
-    final state = CallMessageState.values.cast<CallMessageState?>().firstWhere(
-        (state) => state.toString() == contentMap['state'],
-        orElse: () => null);
+    final state = CallMessageState.values
+        .cast<CallMessageState?>()
+        .firstWhere((state) => state.toString() == contentMap['state'], orElse: () => null);
     var duration = contentMap['duration'];
     final media = CallMessageTypeEx.fromValue(contentMap['media']);
-    if (state is! CallMessageState || duration is! int || media == null)
-      return null;
+    if (state is! CallMessageState || duration is! int || media == null) return null;
 
     if (!state.shouldShowMessage) return null;
 
     duration = max(duration, 0);
     final isMe = OXUserInfoManager.sharedInstance.isCurrentUser(author.id);
-    final durationText =
-        Duration(milliseconds: duration).toString().substring(2, 7);
+    final durationText = Duration(milliseconds: duration).toString().substring(2, 7);
     return types.CustomMessage(
       author: author,
       createdAt: timestamp,
@@ -308,8 +312,7 @@ extension CallStateMessageEx on CallMessageState {
             ? Localized.text('ox_calling.str_call_other_not_answered')
             : Localized.text('ox_calling.str_call_not_answered');
       case CallMessageState.disconnect:
-        return Localized.text('ox_calling.str_call_duration')
-            .replaceAll(r'${time}', durationText);
+        return Localized.text('ox_calling.str_call_duration').replaceAll(r'${time}', durationText);
       case CallMessageState.inCalling:
         return Localized.text('ox_calling.str_call_busy');
       default:
@@ -333,6 +336,7 @@ class SystemMessageFactory implements MessageFactory {
     String? repliedMessageId,
     String? previewData,
     String? decryptKey,
+    String? decryptNonce,
     int? expiration,
     List<types.Reaction> reactions = const [],
     List<types.ZapsInfo> zapsInfoList = const [],
@@ -341,12 +345,10 @@ class SystemMessageFactory implements MessageFactory {
     final key = text;
     if (key.isNotEmpty) {
       text = Localized.text(key, useOrigin: true);
-      if (key == 'ox_chat.screen_record_hint_message' ||
-          key == 'ox_chat.screenshot_hint_message') {
+      if (key == 'ox_chat.screen_record_hint_message' || key == 'ox_chat.screenshot_hint_message') {
         final isMe = OXUserInfoManager.sharedInstance.isCurrentUser(author.id);
-        final name = isMe
-            ? Localized.text('ox_common.you')
-            : (author.sourceObject?.getUserShowName() ?? '');
+        final name =
+            isMe ? Localized.text('ox_common.you') : (author.sourceObject?.getUserShowName() ?? '');
         text = text.replaceAll(r'${user}', name);
       }
     }
@@ -366,9 +368,7 @@ class SystemMessageFactory implements MessageFactory {
 }
 
 class CustomMessageFactory implements MessageFactory {
-
   static ({CustomMessageType type, Map content})? parseFromContentString(String contentString) {
-
     try {
       final contentMap = json.decode(contentString);
       if (contentMap is! Map) return null;
@@ -397,6 +397,7 @@ class CustomMessageFactory implements MessageFactory {
     String? repliedMessageId,
     String? previewData,
     String? decryptKey,
+    String? decryptNonce,
     int? expiration,
     List<types.Reaction> reactions = const [],
     List<types.ZapsInfo> zapsInfoList = const [],
@@ -449,18 +450,19 @@ class CustomMessageFactory implements MessageFactory {
           icon: icon,
           link: link,
           expiration: expiration,
-      reactions: reactions,
-      zapsInfoList: zapsInfoList,
+          reactions: reactions,
+          zapsInfoList: zapsInfoList,
         );
 
       case CustomMessageType.note:
-        final authorIcon = contentMap['authorIcon'];
-        final authorName = contentMap['authorName'];
-        final authorDNS = contentMap['authorDNS'];
-        final createTime = contentMap['createTime'];
-        final note = contentMap['note'];
-        final image = contentMap['image'];
-        final link = contentMap['link'];
+        final sourceScheme = contentMap['sourceScheme'] ?? '';
+        final authorIcon = contentMap['authorIcon'] ?? '';
+        final authorName = contentMap['authorName'] ?? '';
+        final authorDNS = contentMap['authorDNS'] ?? '';
+        final createTime = contentMap['createTime'] ?? '';
+        final note = contentMap['note'] ?? '';
+        final image = contentMap['image'] ?? '';
+        final link = contentMap['link'] ?? '';
         return createNoteMessage(
           author: author,
           timestamp: timestamp,
@@ -468,6 +470,7 @@ class CustomMessageFactory implements MessageFactory {
           id: remoteId ?? messageId ?? '',
           remoteId: remoteId,
           sourceKey: sourceKey,
+          sourceScheme: sourceScheme,
           authorIcon: authorIcon,
           authorName: authorName,
           authorDNS: authorDNS,
@@ -509,17 +512,13 @@ class CustomMessageFactory implements MessageFactory {
           final tokenListRaw = contentMap[EcashV2MessageEx.metaTokenListKey];
           List<String> tokenList = [];
           if (tokenListRaw is List) {
-            tokenList = tokenListRaw
-                .map((e) => e.toString())
-                .toList();
+            tokenList = tokenListRaw.map((e) => e.toString()).toList();
           }
 
           final receiverPubkeysRaw = contentMap[EcashV2MessageEx.metaReceiverPubkeysKey];
           List<String> receiverPubkeys = [];
           if (receiverPubkeysRaw is List) {
-            receiverPubkeys = receiverPubkeysRaw
-                .map((e) => e.toString())
-                .toList();
+            receiverPubkeys = receiverPubkeysRaw.map((e) => e.toString()).toList();
           }
           return createEcashMessage(
             author: author,
@@ -544,12 +543,13 @@ class CustomMessageFactory implements MessageFactory {
         }
 
       case CustomMessageType.imageSending:
-        final fileId = contentMap[ImageSendingMessageEx.metaFileIdKey];
-        final path = contentMap[ImageSendingMessageEx.metaPathKey];
-        final url = contentMap[ImageSendingMessageEx.metaURLKey];
-        final width = contentMap[ImageSendingMessageEx.metaWidthKey];
-        final height = contentMap[ImageSendingMessageEx.metaHeightKey];
-        final encryptedKey = contentMap[ImageSendingMessageEx.metaEncryptedKey];
+        String fileId = contentMap[ImageSendingMessageEx.metaFileIdKey] ?? '';
+        String path = contentMap[ImageSendingMessageEx.metaPathKey] ?? '';
+        String url = contentMap[ImageSendingMessageEx.metaURLKey] ?? '';
+        int? width = contentMap[ImageSendingMessageEx.metaWidthKey];
+        int? height = contentMap[ImageSendingMessageEx.metaHeightKey];
+        String? encryptedKey = contentMap[ImageSendingMessageEx.metaEncryptedKey];
+        String? encryptedNonce = contentMap[ImageSendingMessageEx.metaEncryptedNonce];
         return createImageSendingMessage(
           author: author,
           timestamp: timestamp,
@@ -566,6 +566,7 @@ class CustomMessageFactory implements MessageFactory {
           width: width,
           height: height,
           encryptedKey: encryptedKey,
+          encryptedNonce: encryptedNonce,
         );
 
       case CustomMessageType.video:
@@ -575,6 +576,8 @@ class CustomMessageFactory implements MessageFactory {
         final url = contentMap[VideoMessageEx.metaURLKey];
         final width = contentMap[VideoMessageEx.metaWidthKey];
         final height = contentMap[VideoMessageEx.metaHeightKey];
+        final encryptedKey = contentMap[VideoMessageEx.metaEncryptedKey];
+        final encryptedNonce = contentMap[VideoMessageEx.metaEncryptedNonce];
         return createVideoMessage(
           author: author,
           timestamp: timestamp,
@@ -591,6 +594,8 @@ class CustomMessageFactory implements MessageFactory {
           url: url,
           width: width,
           height: height,
+          encryptedKey: encryptedKey,
+          encryptedNonce: encryptedNonce,
         );
       default:
         return null;
@@ -679,6 +684,7 @@ class CustomMessageFactory implements MessageFactory {
     int? expiration,
     List<types.Reaction> reactions = const [],
     List<types.ZapsInfo> zapsInfoList = const [],
+    required String sourceScheme,
     required String authorIcon,
     required String authorName,
     required String authorDNS,
@@ -695,6 +701,7 @@ class CustomMessageFactory implements MessageFactory {
       remoteId: remoteId,
       roomId: roomId,
       metadata: CustomMessageEx.noteMetaData(
+        sourceScheme: sourceScheme,
         authorIcon: authorIcon,
         authorName: authorName,
         authorDNS: authorDNS,
@@ -765,6 +772,7 @@ class CustomMessageFactory implements MessageFactory {
     required int? width,
     required int? height,
     required String? encryptedKey,
+    required String? encryptedNonce,
   }) {
     return types.CustomMessage(
       author: author,
@@ -780,9 +788,11 @@ class CustomMessageFactory implements MessageFactory {
         width: width,
         height: height,
         encryptedKey: encryptedKey,
+        encryptedNonce: encryptedNonce,
       ),
       type: types.MessageType.custom,
       decryptKey: encryptedKey,
+      decryptNonce: encryptedNonce,
       expiration: expiration,
       reactions: reactions,
       zapsInfoList: zapsInfoList,
@@ -807,6 +817,7 @@ class CustomMessageFactory implements MessageFactory {
     int? width,
     int? height,
     String? encryptedKey,
+    String? encryptedNonce,
   }) {
     return types.CustomMessage(
       author: author,
@@ -823,9 +834,11 @@ class CustomMessageFactory implements MessageFactory {
         width: width,
         height: height,
         encryptedKey: encryptedKey,
+        encryptedNonce: encryptedNonce,
       ),
       type: types.MessageType.custom,
       decryptKey: encryptedKey,
+      decryptNonce: encryptedNonce,
       expiration: expiration,
       reactions: reactions,
       zapsInfoList: zapsInfoList,

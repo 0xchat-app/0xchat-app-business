@@ -29,6 +29,7 @@ abstract class CustomMessage extends Message {
     super.status,
     MessageType? type,
     super.decryptKey,
+    super.decryptNonce,
     super.updatedAt,
     super.expiration,
     super.reactions,
@@ -50,6 +51,7 @@ abstract class CustomMessage extends Message {
     Status? status,
     MessageType? type,
     String? decryptKey,
+    String? decryptNonce,
     int? updatedAt,
     int? expiration,
     List<Reaction> reactions,
@@ -123,7 +125,7 @@ abstract class CustomMessage extends Message {
       ];
 
   @override
-  Message copyWith({
+  CustomMessage copyWith({
     User? author,
     int? createdAt,
     String? id,
@@ -138,6 +140,7 @@ abstract class CustomMessage extends Message {
     int? updatedAt,
     EncryptionType? fileEncryptionType,
     String? decryptKey,
+    String? decryptNonce,
     int? expiration,
     List<Reaction>? reactions,
     List<ZapsInfo>? zapsInfoList,
@@ -165,6 +168,7 @@ class _CustomMessage extends CustomMessage {
     super.status,
     super.type,
     super.decryptKey,
+    super.decryptNonce,
     super.updatedAt,
     super.expiration,
     super.reactions,
@@ -173,7 +177,7 @@ class _CustomMessage extends CustomMessage {
   }) : super._();
 
   @override
-  Message copyWith({
+  CustomMessage copyWith({
     User? author,
     int? createdAt,
     String? id,
@@ -188,6 +192,7 @@ class _CustomMessage extends CustomMessage {
     dynamic updatedAt = _Unset,
     EncryptionType? fileEncryptionType,
     String? decryptKey,
+    String? decryptNonce,
     int? expiration,
     List<Reaction>? reactions,
     List<ZapsInfo>? zapsInfoList,
@@ -199,7 +204,7 @@ class _CustomMessage extends CustomMessage {
         id: id ?? this.id,
         sourceKey: sourceKey ?? this.sourceKey,
         metadata: metadata == _Unset
-            ? this.metadata
+            ? jsonDecode(jsonEncode(this.metadata))
             : metadata as Map<String, dynamic>?,
         remoteId: remoteId == _Unset ? this.remoteId : remoteId as String?,
         repliedMessage: repliedMessage == _Unset
@@ -211,6 +216,7 @@ class _CustomMessage extends CustomMessage {
             showStatus == _Unset ? this.showStatus : showStatus as bool?,
         status: status == _Unset ? this.status : status as Status?,
         decryptKey: decryptKey ?? this.decryptKey,
+        decryptNonce: decryptNonce ?? this.decryptNonce,
         updatedAt: updatedAt == _Unset ? this.updatedAt : updatedAt as int?,
         expiration: expiration ?? this.expiration,
         viewWithoutBubble: viewWithoutBubble ?? this.viewWithoutBubble,

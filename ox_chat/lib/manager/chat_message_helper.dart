@@ -13,13 +13,13 @@ import 'package:ox_chat/utils/custom_message_utils.dart';
 import 'package:ox_chat/utils/general_handler/chat_mention_handler.dart';
 import 'package:ox_chat/utils/general_handler/chat_nostr_scheme_handler.dart';
 import 'package:ox_chat/utils/message_factory.dart';
+import 'package:ox_chat/utils/widget_tool.dart';
+import 'package:ox_common/business_interface/ox_chat/call_message_type.dart';
 import 'package:ox_common/business_interface/ox_chat/custom_message_type.dart';
 import 'package:ox_common/business_interface/ox_chat/utils.dart';
 import 'package:ox_common/utils/ox_userinfo_manager.dart';
 import 'package:ox_common/utils/video_utils.dart';
 import 'package:ox_localizable/ox_localizable.dart';
-
-import 'chat_data_cache.dart';
 
 class OXValue<T> {
   OXValue(this.value);
@@ -44,6 +44,7 @@ class ChatMessageHelper {
     MessageType type,
     String senderId,
   ) {
+    final unknownText = Localized.text('ox_common.message_type_unknown');
     switch (type) {
       case MessageType.text:
         final mentionDecoderText = ChatMentionMessageEx.tryDecoder(contentText);
@@ -98,44 +99,61 @@ class ChatMessageHelper {
         }
         return text;
       case MessageType.call:
-        return Localized.text('ox_common.message_type_call');
-      case MessageType.template:
-        if (contentText.isNotEmpty) {
-          try {
-            final decryptedContent = json.decode(contentText);
-            if (decryptedContent is Map) {
-              final type = CustomMessageTypeEx.fromValue(decryptedContent['type']);
-              final content = decryptedContent['content'];
-              switch (type) {
-                case CustomMessageType.zaps:
-                  return Localized.text('ox_common.message_type_zaps');
-                case CustomMessageType.template:
-                  if (content is Map) {
-                    final title = content['title'] ?? '';
-                    return Localized.text('ox_common.message_type_template') + title;
-                  }
-                  break ;
-                case CustomMessageType.ecash:
-                case CustomMessageType.ecashV2:
-                  var memo = '';
-                  try {
-                    memo = EcashMessageEx.getDescriptionWithMetadata(json.decode(contentText));
-                  } catch (_) { }
-                  return '[Cashu Ecash] $memo';
-                case CustomMessageType.imageSending:
-                  return Localized.text('ox_common.message_type_image');
-                case CustomMessageType.video:
-                  return Localized.text('ox_common.message_type_video');
-                default:
-                  break ;
-              }
-            }
-          } catch (_) { }
+        var contentMap;
+        try {
+          contentMap = json.decode(contentText);
+        } catch (_) { }
+
+        final type = CallMessageTypeEx.fromValue(contentMap['media']);
+        if (type == null) break ;
+
+        switch (type) {
+          case CallMessageType.audio: return '[${'str_voice_call'.localized()}]';
+          case CallMessageType.video: return '[${'str_video_call'.localized()}]';
         }
-        return Localized.text('ox_common.message_type_unknown');
-      default:
-        return Localized.text('ox_common.message_type_unknown');
+      case MessageType.template:
+        if (contentText.isEmpty) break ;
+
+        Map metaMap = {};
+        try {
+          metaMap = json.decode(contentText);
+        } catch (_) { }
+
+        final type = CustomMessageTypeEx.fromValue(metaMap[CustomMessageEx.metaTypeKey]);
+        final content = metaMap[CustomMessageEx.metaContentKey];
+        if (type == null) break;
+
+        switch (type) {
+          case CustomMessageType.zaps:
+            return Localized.text('ox_common.message_type_zaps');
+          case CustomMessageType.template:
+            if (content is Map) {
+              final title = content['title'] ?? '';
+              return Localized.text('ox_common.message_type_template') + title;
+            }
+            break ;
+          case CustomMessageType.ecash:
+          case CustomMessageType.ecashV2:
+            var memo = '';
+            try {
+              memo = EcashMessageEx.getDescriptionWithMetadata(json.decode(contentText));
+            } catch (_) { }
+            return '[Cashu Ecash] $memo';
+          case CustomMessageType.imageSending:
+            return Localized.text('ox_common.message_type_image');
+          case CustomMessageType.video:
+            return Localized.text('ox_common.message_type_video');
+          case CustomMessageType.note:
+            final sourceScheme = NoteMessageEx.getSourceSchemeWithMetadata(metaMap);
+            if (sourceScheme != null && sourceScheme.isNotEmpty) return sourceScheme;
+            return Localized.text('ox_common.message_type_template');
+          case CustomMessageType.call:
+            return CallMessageEx.getDescriptionWithMetadata(metaMap) ?? unknownText;
+        }
+        break ;
     }
+
+    return unknownText;
   }
 
   static Future<types.User?> _getUser(String userPubkey) async {
@@ -154,7 +172,7 @@ class ChatMessageHelper {
     try {
       final decryptedContent = json.decode(decryptContent);
       if (decryptedContent is Map) {
-        return decryptedContent['duration'];
+        return decryptedContent['content'];
       } else if (decryptedContent is String) {
         return decryptedContent;
       }
@@ -166,6 +184,7 @@ class ChatMessageHelper {
     required String content,
     required MessageType messageType,
     required String? decryptSecret,
+    required String? decryptNonce,
     Function(String content, MessageType messageType)? asyncParseCallback,
     VoidCallback? isMentionMessageCallback = null,
     MessageCheckLogger? logger,
@@ -188,7 +207,7 @@ class ChatMessageHelper {
           // Template Msg
           ChatNostrSchemeHandle.tryDecodeNostrScheme(initialText).then((nostrSchemeContent) async {
             logger?.print('step async - initialText: $initialText, nostrSchemeContent: ${nostrSchemeContent}');
-            if(nostrSchemeContent != null) {
+            if (nostrSchemeContent != null) {
               asyncParseCallback?.call(nostrSchemeContent, MessageType.template);
             }
           });
@@ -211,12 +230,18 @@ class ChatMessageHelper {
           return (newContent, MessageType.template);
         }
 
+        MessageDBISAR.identifyUrl(content).then((value) {
+          if (messageType == value) return ;
+          asyncParseCallback?.call(content, value);
+        });
+
         return (content, messageType);
       case MessageType.image:
       case MessageType.encryptedImage:
         final meta = CustomMessageEx.imageSendingMetaData(
           url: content,
           encryptedKey: decryptSecret,
+          encryptedNonce: decryptNonce
         );
         try {
           final jsonString = jsonEncode(meta);
@@ -233,6 +258,8 @@ class ChatMessageHelper {
             videoURL: url,
             onlyFromCache: true,
           ))?.path ?? '',
+          encryptedKey: decryptSecret,
+          encryptedNonce: decryptNonce,
         );
         try {
           final jsonString = jsonEncode(meta);
@@ -371,6 +398,7 @@ class ChatMessageHelper {
     String? previewData,
     dynamic sourceKey,
     String? decryptSecret,
+    String? decryptNonce,
     int? expiration,
     List<String> reactionIds = const [],
     List<String> zapsInfoIds = const [],
@@ -393,6 +421,7 @@ class ChatMessageHelper {
       content: contentRaw,
       messageType: type,
       decryptSecret: decryptSecret,
+      decryptNonce: decryptNonce,
       asyncParseCallback: asyncParseCallback,
       isMentionMessageCallback: isMentionMessageCallback,
       logger: logger,
@@ -422,6 +451,7 @@ class ChatMessageHelper {
       repliedMessageId: replyId,
       previewData: previewData,
       decryptKey: decryptSecret,
+      decryptNonce: decryptNonce,
       expiration: expiration,
       reactions: reactions,
       zapsInfoList: zapsInfoList,
@@ -441,7 +471,8 @@ class ChatMessageHelper {
       'previewData: $previewData'
       'sourceKey: $sourceKey'
       'decryptSecret: $decryptSecret'
-      'expiration: $expiration'
+          'decryptNonce: $decryptNonce'
+          'expiration: $expiration'
       'reactionIds: $reactionIds'
       'zapsInfoIds: $zapsInfoIds'
     );
@@ -456,6 +487,7 @@ extension MessageDBToUIEx on MessageDBISAR {
   Future<types.Message?> toChatUIMessage({
     bool loadRepliedMessage = true,
     VoidCallback? isMentionMessageCallback,
+    Function(MessageDBISAR newMessage)? asyncUpdateHandler,
   }) async {
     // Status
     final msgStatus = getStatus();
@@ -468,13 +500,8 @@ extension MessageDBToUIEx on MessageDBISAR {
     final asyncParseCallback = (String content, MessageType messageType) async {
       parseTo(type: messageType, decryptContent: content);
       await Messages.saveMessageToDB(this);
-      final key = ChatDataCacheGeneralMethodEx.getChatTypeKeyWithMessage(this);
-      final uiMessage = await this.toChatUIMessage();
-      if(uiMessage != null){
-        ChatDataCache.shared.updateMessage(chatKey: key, message: uiMessage);
-      }
+      asyncUpdateHandler?.call(this);
     };
-
     return ChatMessageHelper.createUIMessage(
       messageId: messageId,
       remoteId: messageId,
@@ -488,6 +515,7 @@ extension MessageDBToUIEx on MessageDBISAR {
       previewData: previewData,
       sourceKey: plaintEvent,
       decryptSecret: decryptSecret,
+      decryptNonce: decryptNonce,
       expiration: expiration,
       reactionIds: reactionEventIds ?? [],
       zapsInfoIds: zapEventIds ?? [],
@@ -583,7 +611,7 @@ extension MessageUIToDBEx on types.Message {
       case types.MessageType.image:
         return encrypt ? MessageType.encryptedImage : MessageType.image;
       case types.MessageType.audio:
-        return MessageType.audio;
+        return encrypt ? MessageType.encryptedAudio: MessageType.audio;
       case types.MessageType.video:
         return MessageType.video;
       case types.MessageType.file:
@@ -603,7 +631,7 @@ extension MessageUIToDBEx on types.Message {
     }
   }
 
-  String contentString(String content) {
+  String contentString() {
     final msg = this;
 
     Map map = {
