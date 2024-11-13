@@ -109,6 +109,7 @@ class _UnifiedSearchPageState extends State<UnifiedSearchPage>
     if (groupList != null && groupList.length > 0) {
       _groups.add(GroupedModel<GroupUIModel>(title: 'str_title_groups'.localized(), items: groupList));
       _searchResult[SearchType.group] = _groups;
+      setState(() {});
     }
   }
 
@@ -247,7 +248,7 @@ class _UnifiedSearchPageState extends State<UnifiedSearchPage>
       _loadChannelsData();
       _loadOnlineGroupsAndChannelsData();
       _loadUsersData();
-      _getMediaList(content: searchQuery);
+      // _getMediaList(content: searchQuery);
     }
     setState(() {});
   }
@@ -257,7 +258,7 @@ class _UnifiedSearchPageState extends State<UnifiedSearchPage>
     _loadRecentChatMessage();
     _loadRecentGroup();
     _loadRecentChannel();
-    _getMediaList();
+    // _getMediaList();
   }
 
 
