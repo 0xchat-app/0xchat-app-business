@@ -287,7 +287,6 @@ extension UserCenterPageUI on UserCenterPageState{
         await TookKit.copyKey(context, encodedPubKey);
       },
       child: Container(
-        height: Adapt.px(33),
         margin: EdgeInsets.only(top: Adapt.px(8)),
         padding: EdgeInsets.symmetric(
             horizontal: Adapt.px(12), vertical: Adapt.px(8)),
@@ -299,13 +298,16 @@ extension UserCenterPageUI on UserCenterPageState{
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              newPubKey,
-              style: TextStyle(
-                  fontSize: Adapt.px(12),
-                  fontWeight: FontWeight.w400,
-                  color: ThemeColor.color0,
-                  overflow: TextOverflow.ellipsis),
+            Container(
+              constraints: BoxConstraints(maxWidth: Adapt.screenW - 96.px),
+              child: Text(
+                newPubKey,
+                style: TextStyle(
+                    fontSize: Adapt.px(12),
+                    fontWeight: FontWeight.w400,
+                    color: ThemeColor.color0,
+                    overflow: TextOverflow.ellipsis),
+              ),
             ),
             SizedBox(width: Adapt.px(8)),
             encodedPubKey.isNotEmpty

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:nostr_core_dart/nostr.dart';
 import 'package:ox_chat/page/session/chat_message_page.dart';
 import 'package:ox_chat/page/session/single_search_page.dart';
+import 'package:ox_chat/utils/widget_tool.dart';
 
 import 'package:ox_common/business_interface/ox_chat/call_message_type.dart';
 
@@ -14,6 +15,7 @@ import 'package:ox_common/business_interface/ox_chat/utils.dart';
 import 'package:ox_common/log_util.dart';
 import 'package:ox_common/utils/custom_uri_helper.dart';
 import 'package:ox_common/utils/took_kit.dart';
+import 'package:ox_common/widgets/common_action_dialog.dart';
 
 import 'package:ox_common/widgets/common_time_dialog.dart';
 import 'package:ox_common/model/chat_session_model_isar.dart';
@@ -54,8 +56,9 @@ class TabModel {
 class ContactUserOptionWidget extends StatefulWidget {
   final String pubkey;
   final String? chatId;
+  final ValueNotifier<bool> isBlockStatus;
 
-  ContactUserOptionWidget({Key? key, required this.pubkey, this.chatId}) : super(key: key);
+  ContactUserOptionWidget({Key? key, required this.pubkey, this.chatId,required this.isBlockStatus}) : super(key: key);
 
   @override
   State<ContactUserOptionWidget> createState() => _ContactUserOptionWidgetState();
@@ -230,36 +233,14 @@ class _ContactUserOptionWidgetState extends State<ContactUserOptionWidget> with 
     if (myPubkey != widget.pubkey)
       modelList = [
         TabModel(
-          onTap: () {
-            if (userDB.pubKey ==
-                OXUserInfoManager.sharedInstance.currentUserInfo!.pubKey) {
-              return CommonToast.instance.show(context, "Don't call yourself");
-            }
-            OXModuleService.pushPage(
-              context,
-              'ox_calling',
-              'CallPage',
-              {'userDB': userDB, 'media': CallMessageType.audio.text},
-            );
-          },
-          iconName: 'icon_chat_call.png',
-          content: Localized.text('ox_chat.call'),
+          onTap: _sendMsg,
+          iconName: 'icon_message.png',
+          content:  Localized.text('ox_chat.message'),
         ),
         TabModel(
-          iconName: 'chat_camera.png',
-          onTap: () {
-            if (userDB.pubKey ==
-                OXUserInfoManager.sharedInstance.currentUserInfo!.pubKey) {
-              return CommonToast.instance.show(context, "Don't call yourself");
-            }
-            OXModuleService.pushPage(
-              context,
-              'ox_calling',
-              'CallPage',
-              {'userDB': userDB, 'media': CallMessageType.video.text},
-            );
-          },
-          content: 'Video',
+          onTap: _clickCall,
+          iconName: 'icon_chat_call.png',
+          content: Localized.text('ox_chat.call'),
         ),
         TabModel(
           onTap: () => _onChangedMute(!_isMute),
@@ -552,8 +533,10 @@ class _ContactUserOptionWidgetState extends State<ContactUserOptionWidget> with 
 
   Widget _addFriendBtnView() {
     bool friendsStatus = false;
+    bool isMe = myPubkey == widget.pubkey;
     friendsStatus = isFriend(userDB.pubKey ?? '');
-    if (friendsStatus) return const SizedBox();
+    myPubkey = OXUserInfoManager.sharedInstance.currentUserInfo?.pubKey ?? '';
+    if (friendsStatus && !isMe) return const SizedBox();
 
     return GestureDetector(
       child: Container(
@@ -573,7 +556,7 @@ class _ContactUserOptionWidgetState extends State<ContactUserOptionWidget> with 
         ),
         alignment: Alignment.center,
         child: Text(
-          'Add Contact',
+          isMe  ?  'Send Message' : 'Add Contact',
           style: TextStyle(
             color: myPubkey != widget.pubkey && friendsStatus
                 ? ThemeColor.red
@@ -583,7 +566,7 @@ class _ContactUserOptionWidgetState extends State<ContactUserOptionWidget> with 
           ),
         ),
       ),
-      onTap: _addFriends,
+      onTap: isMe ? _sendMsg : _addFriends,
     ).setPaddingOnly(top: 16.px);
   }
 
@@ -619,45 +602,57 @@ class _ContactUserOptionWidgetState extends State<ContactUserOptionWidget> with 
 
   void _blockOptionFn() async {
     String pubKey = userDB.pubKey ?? '';
-    if (_isInBlockList()) {
+    bool isBlocked = _isInBlockList();
+
+    if (isBlocked) {
       OKEvent event = await Contacts.sharedInstance.removeBlockList([pubKey]);
-      if (!event.status) {
-        CommonToast.instance.show(context, Localized.text('ox_chat.un_block_fail'));
+      if (event.status) {
+        _updateOptionList(addOption: true);
       } else {
-        if (!moreOptionList.contains(EMoreOptionType.userOption)) {
-          moreOptionList.add(EMoreOptionType.userOption);
-          setState(() {});
-        }
+        CommonToast.instance.show(context, Localized.text('ox_chat.un_block_fail'));
       }
     } else {
-      OXCommonHintDialog.show(context,
-          title: Localized.text('ox_chat.block_dialog_title'),
-          content: Localized.text('ox_chat.block_dialog_content'),
-          actionList: [
-            OXCommonHintAction.cancel(onTap: () {
-              OXNavigator.pop(context, false);
-            }),
-            OXCommonHintAction.sure(
-                text: Localized.text('ox_common.confirm'),
-                onTap: () async {
-                  OKEvent event =
-                  await Contacts.sharedInstance.addToBlockList(pubKey);
-                  if (!event.status) {
-                    CommonToast.instance.show(context, Localized.text('ox_chat.block_fail'));
-                  } else {
-                    if (moreOptionList.contains(EMoreOptionType.userOption)) {
-                      moreOptionList.remove(EMoreOptionType.userOption);
-                      setState(() {});
-                    }
-                  }
-                  OXChatBinding.sharedInstance.deleteSession([pubKey]);
-                  OXNavigator.pop(context, true);
-                }),
-          ],
-          isRowAction: true);
+      _showBlockDialog(pubKey);
+    }
+  }
+
+  void _updateOptionList({required bool addOption}) {
+    widget.isBlockStatus.value = !addOption;
+    if (addOption && !moreOptionList.contains(EMoreOptionType.userOption)) {
+      moreOptionList.add(EMoreOptionType.userOption);
+    } else if (!addOption && moreOptionList.contains(EMoreOptionType.userOption)) {
+      moreOptionList.remove(EMoreOptionType.userOption);
     }
     setState(() {});
   }
+
+  void _showBlockDialog(String pubKey) {
+    OXCommonHintDialog.show(
+      context,
+      title: Localized.text('ox_chat.block_dialog_title'),
+      content: Localized.text('ox_chat.block_dialog_content'),
+      actionList: [
+        OXCommonHintAction.cancel(onTap: () {
+          OXNavigator.pop(context, false);
+        }),
+        OXCommonHintAction.sure(
+          text: Localized.text('ox_common.confirm'),
+          onTap: () async {
+            OKEvent event = await Contacts.sharedInstance.addToBlockList(pubKey);
+            if (event.status) {
+              _updateOptionList(addOption: false);
+              OXChatBinding.sharedInstance.deleteSession([pubKey]);
+              OXNavigator.pop(context, true);
+            } else {
+              CommonToast.instance.show(context, Localized.text('ox_chat.block_fail'));
+            }
+          },
+        ),
+      ],
+      isRowAction: true,
+    );
+  }
+
 
   Future<void> _clickKey(String keyContent) async {
     await Clipboard.setData(
@@ -1148,5 +1143,45 @@ class _ContactUserOptionWidgetState extends State<ContactUserOptionWidget> with 
         }
       },
     );
+  }
+
+  void _clickCall() async {
+    if (userDB.pubKey ==
+        OXUserInfoManager.sharedInstance.currentUserInfo!.pubKey) {
+      CommonToast.instance.show(context, "Don't call yourself");
+    } else {
+      OXActionModel? oxActionModel = await OXActionDialog.show(
+        context,
+        data: [
+          OXActionModel(
+              identify: 0,
+              text: 'str_video_call'.localized(),
+              iconName: 'icon_call_video.png',
+              package: 'ox_chat',
+              isUseTheme: true),
+          OXActionModel(
+              identify: 1,
+              text: 'str_voice_call'.localized(),
+              iconName: 'icon_call_voice.png',
+              package: 'ox_chat',
+              isUseTheme: true),
+        ],
+        backGroundColor: ThemeColor.color180,
+        separatorCancelColor: ThemeColor.color190,
+      );
+      if (oxActionModel != null) {
+        OXModuleService.pushPage(
+          context,
+          'ox_calling',
+          'CallPage',
+          {
+            'userDB': userDB,
+            'media': oxActionModel.identify == 1
+                ? CallMessageType.audio.text
+                : CallMessageType.video.text,
+          },
+        );
+      }
+    }
   }
 }
