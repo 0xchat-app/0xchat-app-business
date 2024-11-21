@@ -159,7 +159,7 @@ extension ChatSessionListPageUI on ChatSessionListPageState{
                                     Padding(
                                       padding: EdgeInsets.only(top: 6.px),
                                       child: Container(
-                                        constraints: BoxConstraints(maxWidth: _subTitleMaxW),
+                                        constraints: BoxConstraints(maxWidth: Adapt.screenW - (48 + 60 + 36 + 30).px),
                                         child: _buildItemSubtitle(item),
                                       ),
                                     ),
@@ -294,7 +294,7 @@ extension ChatSessionListPageUI on ChatSessionListPageState{
         ],
       )
           : nameView,
-      constraints: BoxConstraints(maxWidth: _nameMaxW),
+      constraints: BoxConstraints(maxWidth:  Adapt.screenW - (48 + 60 + 36 + 50).px),
     );
   }
 
