@@ -10,6 +10,7 @@ import 'package:ox_common/utils/adapt.dart';
 import 'package:ox_common/utils/ox_chat_binding.dart';
 import 'package:ox_common/utils/ox_chat_observer.dart';
 import 'package:ox_common/utils/ox_moment_manager.dart';
+import 'package:ox_common/utils/ox_split_view_page_manager.dart';
 import 'package:ox_common/utils/ox_userinfo_manager.dart';
 import 'package:ox_common/utils/platform_utils.dart';
 import 'package:ox_common/utils/storage_key_tool.dart';
@@ -20,6 +21,7 @@ import 'package:ox_home/model/tab_view_info.dart';
 import 'package:ox_home/widgets/translucent_navigation_bar.dart';
 import 'package:ox_localizable/ox_localizable.dart';
 import 'package:ox_module_service/ox_module_service.dart';
+import 'package:ox_common/widgets/adaptive_split_widget.dart';
 
 class HomeTabBarPage extends StatefulWidget {
   const HomeTabBarPage({
@@ -46,6 +48,8 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
   late List<HomeTabBarType> _typeList;
 
   late List<TabViewInfo> tabViewInfo;
+
+  ValueNotifier<int> currentIndex = ValueNotifier(0);
 
   @override
   void initState() {
@@ -77,10 +81,83 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
-  
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _pageController = PageController(initialPage: currentIndex.value);
+        final isWideScreen = constraints.maxWidth > PlatformUtils.listWidth;
+        if (!isWideScreen) {
+          return   ValueListenableBuilder(
+              valueListenable: currentIndex,
+              builder: (BuildContext context, messages, Widget? child){
+                return _contentWidget();
+              });
+        }
+        return Row(
+          children: [
+            ValueListenableBuilder(
+                valueListenable: currentIndex,
+                builder: (BuildContext context, messages, Widget? child){
+                  return Container(
+                      width: PlatformUtils.listWidth,
+                      child: _contentWidget()
+                  );
+                }),
+
+            ValueListenableBuilder(
+                valueListenable: OXClientPageManager.sharedInstance.currentPage,
+                builder: (BuildContext context, messages, Widget? child){
+                  return Expanded(
+                    flex: 2,
+                    child: messages ??
+                        Center(
+                          child: Text(
+                            'Select an item',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
+                  );
+                }),
+          ],
+        );
+      },
+    );
+    // return AdaptiveSplitWidget(
+    //   currentIndex: currentIndex,
+    //   navigationList: Scaffold(
+    //     extendBody: true,
+    //     bottomNavigationBar: Align(
+    //       alignment: Alignment.bottomCenter,
+    //       child: ConstrainedBox(
+    //         constraints: BoxConstraints(maxWidth:  PlatformUtils.listWidth),
+    //         child: TranslucentNavigationBar(
+    //           key: tabBarGlobalKey,
+    //           onTap: (changeIndex, currentSelect) => _tabClick(changeIndex, currentSelect),
+    //           handleDoubleTap: (changeIndex, currentSelect) => _handleDoubleTap(changeIndex, currentSelect),
+    //           height: _bottomNavHeight,
+    //         ),
+    //       ),
+    //     ),
+    //     body: PageView(
+    //       physics: const NeverScrollableScrollPhysics(),
+    //       controller: _pageController,
+    //       children: _containerView(context),
+    //     ),
+    //   ),
+    //   selectedContent: ValueNotifier(null),
+    // );
+
+
+  }
+
+  Widget _contentWidget(){
+    return  Scaffold(
       extendBody: true,
       bottomNavigationBar: Align(
         alignment: Alignment.bottomCenter,
@@ -144,7 +221,7 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
           if (scrollNotification is ScrollUpdateNotification) {
             double delta = currentOffset - _previousScrollOffset;
             if (currentOffset >= scrollNotification.metrics.maxScrollExtent
-            || (tabBarGlobalKey.currentState!= null && tabBarGlobalKey.currentState!.getAnimStatus())) {
+                || (tabBarGlobalKey.currentState!= null && tabBarGlobalKey.currentState!.getAnimStatus())) {
               return false;
             }
             _previousScrollOffset = currentOffset;
@@ -269,6 +346,7 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
   }
 
   void _toPage(int index, {bool animated = true}){
+    currentIndex.value = index;
     if (animated) {
       _pageController.animateToPage(
         index,
