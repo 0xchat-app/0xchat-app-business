@@ -1,12 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:lottie/lottie.dart';
 import 'package:ox_common/utils/storage_key_tool.dart';
 import 'package:ox_common/utils/user_config_tool.dart';
 import 'package:ox_module_service/ox_module_service.dart';
-import 'package:rive/rive.dart';
-import 'package:ox_common/utils/adapt.dart';
 import 'package:ox_theme/ox_theme.dart';
 import 'package:ox_home/page/home_tabbar.dart';
 
@@ -24,8 +22,6 @@ class LaunchPageViewState extends State<LaunchPageView> {
   final stateMachineNames = 'Button';
   final riveInputs = 'Press';
 
-  late StateMachineController? riveControllers;
-  Artboard? riveArtboards;
 
   String _localPasscode = '';
 
@@ -35,10 +31,8 @@ class LaunchPageViewState extends State<LaunchPageView> {
     _loadData();
   }
 
-  void _loadData() async {
+  void _loadData() {
     _localPasscode = UserConfigTool.getSetting(StorageSettingKey.KEY_PASSCODE.name, defaultValue: '');
-    _loadRiveFile();
-    _onLoaded();
   }
 
   @override
@@ -55,52 +49,22 @@ class LaunchPageViewState extends State<LaunchPageView> {
   }
 
   Widget buildBody(BuildContext context) {
-    if (riveArtboards != null && riveControllers != null) {
-      return Container(
-        color: Colors.black,
-        width: double.infinity,
-        height: double.infinity,
-        child: Center(
-          child: Container(
-            width: Adapt.px(360),
-            height: Adapt.px(360),
-            margin: EdgeInsets.only(
-              bottom: Adapt.px(100),
-            ),
-            child: Rive(artboard: riveArtboards!),
-          ),
+    return Container(
+      color: Colors.black,
+      width: double.infinity,
+      height: double.infinity,
+      child: Center(
+        child: Lottie.asset(
+          "packages/ox_home/assets/${ThemeManager.images("launch_view_anim.json")}",
+          fit: BoxFit.fitWidth,
+          width: double.infinity,
+          height: double.infinity,
+          onLoaded: (composition) {
+            _onLoaded();
+          },
         ),
-      );
-    }
-    return Container();
-  }
-
-  Future<void> _loadRiveFile() async {
-    await RiveFile.initialize();
-
-    String animPath =
-        "packages/ox_home/assets/${ThemeManager.images(riveFileNames)}.riv";
-
-    final data = await rootBundle.load(animPath);
-    final file = RiveFile.import(data);
-    final artboard = file.mainArtboard;
-
-    StateMachineController? controller =
-        StateMachineController.fromArtboard(artboard, stateMachineNames);
-    //
-    if (controller != null) {
-      artboard.addController(controller);
-      riveControllers = controller;
-      riveArtboards = artboard;
-      setState(() {});
-    }
-
-    StateMachineController? animController = riveControllers;
-
-    final input = animController?.findInput<bool>(riveInputs);
-    if (input != null) {
-      input.value = true;
-    }
+      ),
+    );
   }
 
   void _onLoaded() {

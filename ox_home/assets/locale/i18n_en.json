@@ -1,6 +1,6 @@
 {
-  "Home": "Chats",
-  "Contact": "Contacts",
-  "Discover": "Discovery",
-  "Me": "Me"
+  "home": "Chats",
+  "contact": "Contacts",
+  "discover": "Discovery",
+  "me": "Me"
 }

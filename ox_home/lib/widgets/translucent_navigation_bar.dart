@@ -26,12 +26,11 @@ import 'package:ox_home/widgets/translucent_navigation_bar.dart';
 import 'package:ox_localizable/ox_localizable.dart';
 import 'package:ox_module_service/ox_module_service.dart';
 import 'package:ox_theme/ox_theme.dart';
-import 'package:rive/rive.dart' as river;
 
 import 'translucent_navigation_bar_item.dart';
 
 export 'translucent_navigation_bar_item.dart';
-
+import 'package:lottie/lottie.dart';
 
 
 class TranslucentNavigationBar extends StatefulWidget {
@@ -93,9 +92,10 @@ class TranslucentNavigationBarState extends State<TranslucentNavigationBar> with
   bool get isDark => ThemeManager.getCurrentThemeStyle() == ThemeStyle.dark;
   late List<HomeTabBarType> _typeList;
   // State machine
-  List<String> riveInputs = [];
-  List<river.StateMachineController?> riveControllers = [];
-  List<river.Artboard?> riveArtboards = [];
+  List<LottieBuilder> _animations = [];
+  List<String> _animationFiles = [];
+  List<AnimationController> _lottieAnimationsControllers = [];
+
   final Map<HomeTabBarType, int> _unreadMap = {};
 
   List<GlobalKey> _navItemKeyList = [];
@@ -153,6 +153,9 @@ class TranslucentNavigationBarState extends State<TranslucentNavigationBar> with
     OXChatBinding.sharedInstance.removeObserver(this);
     OXMomentManager.sharedInstance.removeObserver(this);
     _animationController.dispose();
+    for (var controller in _lottieAnimationsControllers) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -312,16 +315,18 @@ class TranslucentNavigationBarState extends State<TranslucentNavigationBar> with
 
     widget.onTap!.call(index,draftIndex);
 
-    for (int i = 0; i < _typeList.length; i++) {
-      final controller = riveControllers[i];
-      final input = controller?.findInput<bool>(riveInputs[i]);
-      if (input != null && input.value) {
-        input.value = false;
+    _playSelectedAnimation(index);
+
+  }
+
+  void _playSelectedAnimation(int index) {
+    for (int i = 0; i < _lottieAnimationsControllers.length; i++) {
+      if (i == index) {
+        _lottieAnimationsControllers[i].forward(from: 0);
+      } else {
+        _lottieAnimationsControllers[i].stop();
+        _lottieAnimationsControllers[i].value = 0;
       }
-    }
-    final input = riveControllers[index]?.findInput<bool>(riveInputs[index]);
-    if (input != null) {
-      input.value = true;
     }
   }
 
@@ -380,11 +385,21 @@ class TranslucentNavigationBarState extends State<TranslucentNavigationBar> with
   }
 
   Widget _getMyTabBarIcon(TranslucentNavigationBarItem item) {
-    if(item.artboard != null){
+    // return Lottie.asset(
+    //   "packages/ox_home/assets/dark/tab_contact.json",
+    //   fit: BoxFit.fitWidth,
+    //   width: 24.px,
+    //   height: 24.px,
+    //   repeat: false,
+    //   onLoaded: (composition) {
+    //
+    //   },
+    // );
+    if(item.lottieBuilder != null){
       return  SizedBox(
         width: Adapt.px(24),
         height: Adapt.px(24),
-        child: river.Rive(artboard: item.artboard!),
+        child: item.lottieBuilder!,
       );
     }
     return const SizedBox();
@@ -401,19 +416,11 @@ class TranslucentNavigationBarState extends State<TranslucentNavigationBar> with
     );
   }
 
-  Future<void> _loadRiveFile(int index) async {
-    String animPath = "packages/ox_home/assets/${ThemeManager.images(_typeList[index].riveFileNames)}.riv";
-
-    final data = await rootBundle.load(animPath);
-    final file = river.RiveFile.import(data);
-    final artboard = file.mainArtboard;
-
-    river.StateMachineController? controller = river.StateMachineController.fromArtboard(artboard, _typeList[index].stateMachineNames);
-    if (controller != null) {
-      artboard.addController(controller);
-      riveControllers[index] = controller;
-      riveArtboards[index] = artboard;
-    }
+  Future<void> _loadAnimFile(String path) async {
+    final pathAnimController = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
+    final lottieAnimation = Lottie.asset(path, width: 24.px, height: 24.px, fit: BoxFit.fitWidth, controller: pathAnimController, repeat: false);
+    _lottieAnimationsControllers.add(pathAnimController);
+    _animations.add(lottieAnimation);
   }
 
   @override
@@ -498,42 +505,37 @@ class TranslucentNavigationBarState extends State<TranslucentNavigationBar> with
 
   Future<void> dataInit() async {
     List<int> tempList = [];
-    riveControllers = List<river.StateMachineController?>.filled(_typeList.length, null);
-    riveArtboards = List<river.Artboard?>.filled(_typeList.length, null);
-    riveInputs.clear();
+    _animations.clear();
+    _animationFiles.clear();
+    _lottieAnimationsControllers.clear();
     _navItemKeyList.clear();
     _itemList.clear();
     _navItemKeyList.clear();
     for(int i = 0; i < _typeList.length; i++){
       tempList.add(i);
-      riveInputs.add('Press');
       HomeTabBarType homeTabBarType = _typeList[i];
       if (!_unreadMap.containsKey(homeTabBarType)) {
         _unreadMap[homeTabBarType] = 0;
       }
       _navItemKeyList.add(GlobalKey());
     }
-    await Future.forEach(tempList, (element) async {
-      await _loadRiveFile(element);
+
+    for(int index in tempList){
+      String animPath = "packages/ox_home/assets/${ThemeManager.images("tab_${_typeList[index].animFileNames}")}.json";
+      _animationFiles.add(animPath);
+    };
+    await Future.forEach(_animationFiles, (element) async {
+      await _loadAnimFile(element);
     });
     int homeIndex = _typeList.indexOf(HomeTabBarType.home);
     selectedIndex = homeIndex;
-    for (int i = 0; i < _typeList.length; i++) {
-      final controller = riveControllers[i];
-      final input = controller?.findInput<bool>(riveInputs[i]);
-      if (input != null && input.value) {
-        input.value = false;
-      }
-    }
-    if (riveControllers[homeIndex] != null) {
-      final input = riveControllers[homeIndex]!.findInput<bool>(riveInputs[homeIndex]);
-      if (input != null) input.value = true;
-    }
+
+    _playSelectedAnimation(homeIndex);
     for(int i = 0; i < _typeList.length; i++){
       _itemList.add(TranslucentNavigationBarItem(
-          title: () => Localized.text('ox_home.${_typeList[i].riveFileNames}'),
-          artboard: riveArtboards[i],
-          animationController: riveControllers[i],
+          title: () => Localized.text('ox_home.${_typeList[i].animFileNames}'),
+          lottieBuilder: _animations[i],
+          animationController: _lottieAnimationsControllers[i],
           unreadMsgCount: _typeList[i] == HomeTabBarType.me ? (UserConfigTool.getSetting(StorageSettingKey.KEY_ZAP_BADGE.name, defaultValue: false) ? 1 : 0) : _unreadMap[_typeList[i]] ?? 0)
       );
     }

@@ -12,16 +12,16 @@ enum HomeTabBarType {
 
 extension HomeTabBarTypeEx on HomeTabBarType {
 
-  String get riveFileNames {
+  String get animFileNames {
     switch (this) {
       case HomeTabBarType.contact:
-        return 'Contact';
+        return 'contact';
       case HomeTabBarType.home:
-        return 'Home';
+        return 'home';
       case HomeTabBarType.discover:
-        return 'Discover';
+        return 'discover';
       case HomeTabBarType.me:
-        return 'Me';
+        return 'me';
     }
   }
 
