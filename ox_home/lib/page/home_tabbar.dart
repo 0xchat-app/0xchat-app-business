@@ -21,6 +21,9 @@ import 'package:ox_home/model/tab_view_info.dart';
 import 'package:ox_home/widgets/translucent_navigation_bar.dart';
 import 'package:ox_localizable/ox_localizable.dart';
 import 'package:ox_module_service/ox_module_service.dart';
+import 'package:bitsdojo_window/bitsdojo_window.dart';
+import 'package:bitsdojo_window_platform_interface/bitsdojo_window_platform_interface.dart';
+
 import 'package:ox_common/widgets/adaptive_split_widget.dart';
 
 class HomeTabBarPage extends StatefulWidget {
@@ -32,7 +35,14 @@ class HomeTabBarPage extends StatefulWidget {
   State<HomeTabBarPage> createState() => _HomeTabBarPageState();
 }
 
-class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver, OXChatObserver, OXMomentObserver, TickerProviderStateMixin, WidgetsBindingObserver, NavigatorObserverMixin {
+class _HomeTabBarPageState extends State<HomeTabBarPage>
+    with
+        OXUserInfoObserver,
+        OXChatObserver,
+        OXMomentObserver,
+        TickerProviderStateMixin,
+        WidgetsBindingObserver,
+        NavigatorObserverMixin {
   bool isLogin = false;
   late PageController _pageController;
 
@@ -62,10 +72,19 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
     WidgetsBinding.instance.addObserver(this);
 
     if (OXUserInfoManager.sharedInstance.momentPosition == 1) {
-      _typeList = [HomeTabBarType.home, HomeTabBarType.contact, HomeTabBarType.discover, HomeTabBarType.me];
+      _typeList = [
+        HomeTabBarType.home,
+        HomeTabBarType.contact,
+        HomeTabBarType.discover,
+        HomeTabBarType.me
+      ];
       _pageController = PageController(initialPage: 0);
     } else {
-      _typeList = [HomeTabBarType.contact, HomeTabBarType.home, HomeTabBarType.me];
+      _typeList = [
+        HomeTabBarType.contact,
+        HomeTabBarType.home,
+        HomeTabBarType.me
+      ];
       _pageController = PageController(initialPage: 1);
     }
     tabViewInfo = TabViewInfo.getTabViewData(_typeList);
@@ -84,89 +103,142 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
 
   @override
   Widget build(BuildContext context) {
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        _pageController = PageController(initialPage: currentIndex.value);
-        final isWideScreen = constraints.maxWidth > PlatformUtils.listWidth;
-        if (!isWideScreen) {
-          return   ValueListenableBuilder(
-              valueListenable: currentIndex,
-              builder: (BuildContext context, messages, Widget? child){
-                return _contentWidget();
-              });
-        }
-        return Row(
-          children: [
-            ValueListenableBuilder(
+    return ValueListenableBuilder(
+        valueListenable: PlatformUtils.isWideScreenNotifier,
+        builder: (BuildContext context, isWideScreen, Widget? child) {
+          // _pageController = PageController(initialPage: messages);
+          if (!isWideScreen) {
+            return ValueListenableBuilder(
                 valueListenable: currentIndex,
-                builder: (BuildContext context, messages, Widget? child){
-                  return Container(
-                      width: PlatformUtils.listWidth,
-                      child: _contentWidget()
-                  );
-                }),
+                builder: (BuildContext context, messages, Widget? child) {
+                  _pageController = PageController(initialPage: messages);
 
-            ValueListenableBuilder(
-                valueListenable: OXClientPageManager.sharedInstance.currentPage,
-                builder: (BuildContext context, messages, Widget? child){
-                  return Expanded(
-                    flex: 2,
-                    child: messages ??
-                        Center(
-                          child: Text(
-                            'Select an item',
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.grey,
-                            ),
-                          ),
+                  return ValueListenableBuilder(
+                      valueListenable:
+                          OXClientPageManager.sharedInstance.currentPage,
+                      builder: (BuildContext context, messages, Widget? child) {
+                       bool isCanPop = OXNavigator.canPop(OXNavigator.navigatorKey.currentContext!);
+
+                        if (messages != null ) {
+                          return messages(context);
+                        }
+                        return _contentWidget();
+                      });
+                });
+          }
+
+
+          return Row(
+            children: [
+              Container(
+                  width: PlatformUtils.listWidth, child: _contentWidget()),
+              ValueListenableBuilder(
+                  valueListenable:
+                      OXClientPageManager.sharedInstance.currentPage,
+                  builder: (BuildContext context, messages, Widget? child) {
+                    Widget rightContent = Center(
+                      child: Text(
+                        'Select an item',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey,
                         ),
-                  );
-                }),
-          ],
-        );
-      },
-    );
-    // return AdaptiveSplitWidget(
-    //   currentIndex: currentIndex,
-    //   navigationList: Scaffold(
-    //     extendBody: true,
-    //     bottomNavigationBar: Align(
-    //       alignment: Alignment.bottomCenter,
-    //       child: ConstrainedBox(
-    //         constraints: BoxConstraints(maxWidth:  PlatformUtils.listWidth),
-    //         child: TranslucentNavigationBar(
-    //           key: tabBarGlobalKey,
-    //           onTap: (changeIndex, currentSelect) => _tabClick(changeIndex, currentSelect),
-    //           handleDoubleTap: (changeIndex, currentSelect) => _handleDoubleTap(changeIndex, currentSelect),
-    //           height: _bottomNavHeight,
+                      ),
+                    );
+                    if (messages!= null) {
+                      rightContent = messages(context);
+                    }
+                    return Expanded(
+                      flex: 2,
+                      child: rightContent,
+                    );
+                  }),
+            ],
+          );
+          // return ValueListenableBuilder(
+          //     valueListenable: OXClientPageManager.sharedInstance.currentPage,
+          //     builder: (BuildContext context, messages, Widget? child) {
+          //
+          //       if (messages != null) {
+          //         return messages(context);
+          //       }
+          //       return _contentWidget();
+          //     });
+        });
+    // return LayoutBuilder(
+    //   builder: (context, constraints) {
+    //
+    //     // print('===isWideScreen===$isWideScreen');
+    //     if (!isWideScreen) {
+    //       return ValueListenableBuilder(
+    //           valueListenable: currentIndex,
+    //           builder: (BuildContext context, messages, Widget? child) {
+    //             _pageController = PageController(initialPage: messages);
+    //
+    //             return ValueListenableBuilder(
+    //                 valueListenable: OXClientPageManager.sharedInstance.currentPage,
+    //                 builder: (BuildContext context, messages, Widget? child) {
+    //
+    //                   if (messages != null) {
+    //                     return messages(context);
+    //                   }
+    //                   return _contentWidget();
+    //                 });
+    //           });
+    //     }
+    //
+    //   print('=====????');
+    //     return Row(
+    //       children: [
+    //         ValueListenableBuilder(
+    //           valueListenable: currentIndex,
+    //           builder: (BuildContext context, messages, Widget? child) {
+    //             _pageController = PageController(initialPage: messages);
+    //
+    //             return Container(
+    //                 width: PlatformUtils.listWidth, child: _contentWidget());
+    //           },
     //         ),
-    //       ),
-    //     ),
-    //     body: PageView(
-    //       physics: const NeverScrollableScrollPhysics(),
-    //       controller: _pageController,
-    //       children: _containerView(context),
-    //     ),
-    //   ),
-    //   selectedContent: ValueNotifier(null),
+    //         ValueListenableBuilder(
+    //           valueListenable: OXClientPageManager.sharedInstance.currentPage,
+    //           builder: (BuildContext context, messages, Widget? child) {
+    //             Widget rightContent = Center(
+    //               child: Text(
+    //                 'Select an item',
+    //                 style: TextStyle(
+    //                   fontSize: 18,
+    //                   color: Colors.grey,
+    //                 ),
+    //               ),
+    //             );
+    //             if (messages != null) {
+    //               rightContent = messages(context);
+    //             }
+    //             return Expanded(
+    //               flex: 2,
+    //               child: rightContent,
+    //             );
+    //           },
+    //         ),
+    //       ],
+    //     );
+    //   },
     // );
-
-
   }
 
-  Widget _contentWidget(){
-    return  Scaffold(
+  Widget _contentWidget() {
+    return Scaffold(
       extendBody: true,
       bottomNavigationBar: Align(
         alignment: Alignment.bottomCenter,
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth:  PlatformUtils.listWidth),
+          constraints: BoxConstraints(maxWidth: PlatformUtils.listWidth),
           child: TranslucentNavigationBar(
             key: tabBarGlobalKey,
-            onTap: (changeIndex, currentSelect) => _tabClick(changeIndex, currentSelect),
-            handleDoubleTap: (changeIndex, currentSelect) => _handleDoubleTap(changeIndex, currentSelect),
+            onTap: (changeIndex, currentSelect) =>
+                _tabClick(changeIndex, currentSelect),
+            handleDoubleTap: (changeIndex, currentSelect) =>
+                _handleDoubleTap(changeIndex, currentSelect),
             height: _bottomNavHeight,
           ),
         ),
@@ -181,7 +253,7 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
 
   List<Widget> _containerView(BuildContext context) {
     return tabViewInfo.map(
-          (TabViewInfo tabModel) {
+      (TabViewInfo tabModel) {
         return Container(
           constraints: const BoxConstraints.expand(
             width: double.infinity,
@@ -193,7 +265,7 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
     ).toList();
   }
 
-  Widget _showPage(TabViewInfo tabModel){
+  Widget _showPage(TabViewInfo tabModel) {
     Map<Symbol, GlobalKey>? params;
 
     if (tabModel.moduleName == 'ox_chat') {
@@ -209,19 +281,17 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
     }
 
     Widget page = OXModuleService.invoke<Widget>(
-        tabModel.moduleName,
-        tabModel.modulePage,
-        [context],
-        params
-    ) ?? const SizedBox();
+            tabModel.moduleName, tabModel.modulePage, [context], params) ??
+        const SizedBox();
     return NotificationListener<ScrollNotification>(
       onNotification: (scrollNotification) {
         if (scrollNotification.metrics.axis == Axis.vertical) {
           double currentOffset = scrollNotification.metrics.pixels;
           if (scrollNotification is ScrollUpdateNotification) {
             double delta = currentOffset - _previousScrollOffset;
-            if (currentOffset >= scrollNotification.metrics.maxScrollExtent
-                || (tabBarGlobalKey.currentState!= null && tabBarGlobalKey.currentState!.getAnimStatus())) {
+            if (currentOffset >= scrollNotification.metrics.maxScrollExtent ||
+                (tabBarGlobalKey.currentState != null &&
+                    tabBarGlobalKey.currentState!.getAnimStatus())) {
               return false;
             }
             _previousScrollOffset = currentOffset;
@@ -236,10 +306,12 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
                 return false;
               }
               if (_bottomNavOffset > 15.px) {
-                tabBarGlobalKey.currentState?.executeAnim(isReverse: false, fromValue: _bottomNavOffset* 0.01);
+                tabBarGlobalKey.currentState?.executeAnim(
+                    isReverse: false, fromValue: _bottomNavOffset * 0.01);
                 _bottomNavOffset = _tabbarSH;
               } else {
-                tabBarGlobalKey.currentState?.updateOffset(_bottomNavOffset * 0.01);
+                tabBarGlobalKey.currentState
+                    ?.updateOffset(_bottomNavOffset * 0.01);
               }
             } else {
               _bottomNavOffset += delta;
@@ -248,10 +320,12 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
                 return false;
               }
               if (_bottomNavOffset < _bottomNavHeight) {
-                tabBarGlobalKey.currentState?.executeAnim(isReverse: true, fromValue: _bottomNavOffset* 0.01);
+                tabBarGlobalKey.currentState?.executeAnim(
+                    isReverse: true, fromValue: _bottomNavOffset * 0.01);
                 _bottomNavOffset = 0.0;
               } else {
-                tabBarGlobalKey.currentState?.updateOffset(_bottomNavOffset * 0.01);
+                tabBarGlobalKey.currentState
+                    ?.updateOffset(_bottomNavOffset * 0.01);
               }
             }
           }
@@ -261,7 +335,8 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
       child: NotificationListener<MsgNotification>(
         onNotification: (msgNotification) {
           if (tabBarGlobalKey.currentState == null) return false;
-          return tabBarGlobalKey.currentState!.updateNotificationListener(msgNotification);
+          return tabBarGlobalKey.currentState!
+              .updateNotificationListener(msgNotification);
         },
         child: page,
       ),
@@ -297,7 +372,12 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
 
   @override
   void didMoveToTabBarCallBack() {
-    _typeList = [HomeTabBarType.home, HomeTabBarType.contact, HomeTabBarType.discover, HomeTabBarType.me];
+    _typeList = [
+      HomeTabBarType.home,
+      HomeTabBarType.contact,
+      HomeTabBarType.discover,
+      HomeTabBarType.me
+    ];
     setState(() {
       tabViewInfo = TabViewInfo.getTabViewData(_typeList);
     });
@@ -308,7 +388,11 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
 
   @override
   void didMoveToTopCallBack() {
-    _typeList = [HomeTabBarType.contact, HomeTabBarType.home, HomeTabBarType.me];
+    _typeList = [
+      HomeTabBarType.contact,
+      HomeTabBarType.home,
+      HomeTabBarType.me
+    ];
     setState(() {
       tabViewInfo = TabViewInfo.getTabViewData(_typeList);
     });
@@ -322,7 +406,11 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
     if (_typeList.length == 3) {
       return;
     }
-    _typeList = [HomeTabBarType.contact, HomeTabBarType.home, HomeTabBarType.me];
+    _typeList = [
+      HomeTabBarType.contact,
+      HomeTabBarType.home,
+      HomeTabBarType.me
+    ];
     setState(() {
       tabViewInfo = TabViewInfo.getTabViewData(_typeList);
     });
@@ -331,21 +419,21 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
     });
   }
 
-  void _handleDoubleTap(value,int currentSelect){
-
-  }
+  void _handleDoubleTap(value, int currentSelect) {}
 
   void _tabClick(int changeIndex, int currentSelect) {
-    if(_typeList.elementAt(changeIndex) == HomeTabBarType.contact && _typeList.elementAt(currentSelect) == HomeTabBarType.contact) {
+    if (_typeList.elementAt(changeIndex) == HomeTabBarType.contact &&
+        _typeList.elementAt(currentSelect) == HomeTabBarType.contact) {
       contactGlobalKey.currentState?.updateContactTabClickAction(1, false);
     }
-    if(_typeList.elementAt(changeIndex) == HomeTabBarType.home && _typeList.elementAt(currentSelect) == HomeTabBarType.home) {
+    if (_typeList.elementAt(changeIndex) == HomeTabBarType.home &&
+        _typeList.elementAt(currentSelect) == HomeTabBarType.home) {
       homeGlobalKey.currentState?.updateHomeTabClickAction(1, false);
     }
     _toPage(changeIndex);
   }
 
-  void _toPage(int index, {bool animated = true}){
+  void _toPage(int index, {bool animated = true}) {
     currentIndex.value = index;
     if (animated) {
       _pageController.animateToPage(
@@ -359,22 +447,28 @@ class _HomeTabBarPageState extends State<HomeTabBarPage> with OXUserInfoObserver
   }
 
   void signerCheck() async {
-    final bool? localIsLoginAmber = await OXCacheManager.defaultOXCacheManager.getForeverData('${OXUserInfoManager.sharedInstance.currentUserInfo?.pubKey??''}${StorageKeyTool.KEY_IS_LOGIN_AMBER}');
+    final bool? localIsLoginAmber = await OXCacheManager.defaultOXCacheManager
+        .getForeverData(
+            '${OXUserInfoManager.sharedInstance.currentUserInfo?.pubKey ?? ''}${StorageKeyTool.KEY_IS_LOGIN_AMBER}');
     if (localIsLoginAmber != null && localIsLoginAmber) {
       bool isInstalled = await CoreMethodChannel.isInstalledAmber();
-      if (mounted && (!isInstalled || OXUserInfoManager.sharedInstance.signatureVerifyFailed)){
+      if (mounted &&
+          (!isInstalled ||
+              OXUserInfoManager.sharedInstance.signatureVerifyFailed)) {
         String showTitle = '';
         String showContent = '';
         if (!isInstalled) {
           showTitle = 'ox_common.open_singer_app_error_title';
           showContent = 'ox_common.open_singer_app_error_content';
-        } else if (OXUserInfoManager.sharedInstance.signatureVerifyFailed){
+        } else if (OXUserInfoManager.sharedInstance.signatureVerifyFailed) {
           showTitle = 'ox_common.tips';
           showContent = 'ox_common.str_singer_app_verify_failed_hint';
         }
         OXUserInfoManager.sharedInstance.resetData();
         OXCommonHintDialog.show(
-          context, title: Localized.text(showTitle), content: Localized.text(showContent),
+          context,
+          title: Localized.text(showTitle),
+          content: Localized.text(showContent),
           actionList: [
             OXCommonHintAction.sure(
                 text: Localized.text('ox_common.confirm'),
