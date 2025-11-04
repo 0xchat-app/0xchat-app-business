@@ -266,9 +266,11 @@
   "str_group_type_open": "Grupo Abierto",
   "str_group_type_close": "Grupo Cerrado",
   "str_group_type_private": "Grupo Privado",
+  "str_group_type_mls": "Grupo Privado MLS (Beta)",
   "str_group_open_description": "Implementación de grupos basados en NIP-29. Cualquiera puede encontrar y unirse al grupo",
   "str_group_close_description": "Implementación de grupos basados en NIP-29. Las personas solo pueden unirse si son agregadas o aceptadas a través de una solicitud de ingreso",
   "str_group_private_description": "Implementación de sala de chat NIP-17. Todos los mensajes están cifrados para cada miembro del grupo",
+  "str_group_MLS_description": "Cifrado de extremo a extremo con sincronización de estado del grupo. Adecuado para grupos privados más grandes. Admite gestión de grupos (agregar/eliminar miembros).",
   "str_public_channel_description": "Implementación de chat público NIP-28. Cualquiera puede unirse y enviar mensajes libremente",
   "str_group_show_description": "La información del grupo es visible para los no miembros",
   "str_group_hidden_description": "La información del grupo está oculta para los no miembros",
@@ -341,5 +343,11 @@
   "str_all_chats_mark_as_read": "Marcar todo como leído",
   "str_show_in_chat": "Mostrar en el chat",
   "media_message_delete_tips": "¿Estás seguro de que quieres eliminar estos mensajes de medios locales?",
-  "chat_input_length_over_hint": "El texto que ingresaste es demasiado largo para enviarlo."
+  "message": "Mensaje",
+  "chat_input_length_over_hint": "El texto que ingresaste es demasiado largo para enviarlo.",
+  "str_move_to_tabbar": "Mover a TabBar",
+  "str_move_to_top": "Mover arriba",
+  "str_remove": "Eliminar",
+  "str_remove_moments": "Eliminar Momentos",
+  "str_remove_moments_hint": "¿Estás seguro de que quieres eliminar el momento? Esta acción no se puede deshacer."
 }
