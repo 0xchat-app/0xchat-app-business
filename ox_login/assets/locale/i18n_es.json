@@ -30,7 +30,7 @@
   "private_key_regular_failed": "Clave privada regular fallida",
   "pub_key_regular_failed": "Clave pública regular fallida",
   "str_not_installed_amber": "No has instalado Amber",
-  "str_nesc_invalid_hint": "El NSEC que ingresaste no es válido. Por favor, ingrésalo nuevamente.",
+  "str_nesc_invalid_hint": "El NSEC que ingresaste no es válido. Por favor, ingrésalo de nuevo.",
   "str_login_with_nip46": "Iniciar sesión con Nip46",
   "str_enter_nip46_login_hint": "Ingresa el enlace Nip46 para iniciar sesión:",
   "str_login_with_qrcode": "Iniciar sesión con código QR",
@@ -39,5 +39,5 @@
   "str_login_with_account": "Iniciar sesión con cuenta",
   "str_login_with_copy_url": "Copiar URL",
   "login_with_aegis": "Iniciar sesión con Aegis",
-  "wait_link_service": "Esperando a conectarse al servicio, o por favor verifica si la aplicación de firma está solicitando autorización"
+  "wait_link_service": "Esperando a conectarse al servicio. Por favor, verifica si la aplicación de firma está solicitando autorización"
 }
